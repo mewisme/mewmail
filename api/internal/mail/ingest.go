@@ -7,6 +7,7 @@ import (
 
 	"mewmail/api/internal/database"
 	"mewmail/api/internal/httputil"
+	"mewmail/api/internal/webhook"
 )
 
 // IngestHandler handles POST /internal/ingest from Postfix.
@@ -14,6 +15,7 @@ type IngestHandler struct {
 	DB             *database.DB
 	Log            *slog.Logger
 	AllowMultipart bool
+	Webhook        *webhook.Client
 }
 
 // ServeHTTP ingests a raw RFC822 message.
@@ -56,10 +58,14 @@ func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"message_id", email.MessageID,
 	)
 
+	if h.Webhook != nil {
+		h.Webhook.EmailReceived(id, email.MailFrom, email.RcptTo, email.Subject, email.MessageID)
+	}
+
 	httputil.WriteSuccess(w, http.StatusCreated, map[string]any{"id": id})
 }
 
 // NewIngestHandler returns the ingest HTTP handler.
-func NewIngestHandler(db *database.DB, log *slog.Logger, allowMultipart bool) http.Handler {
-	return &IngestHandler{DB: db, Log: log, AllowMultipart: allowMultipart}
+func NewIngestHandler(db *database.DB, log *slog.Logger, allowMultipart bool, wh *webhook.Client) http.Handler {
+	return &IngestHandler{DB: db, Log: log, AllowMultipart: allowMultipart, Webhook: wh}
 }

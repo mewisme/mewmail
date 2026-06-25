@@ -135,8 +135,18 @@ OpenAPI 3 spec and UI (internal network):
 | `PORT` | `8080` | API listen port (host + container) |
 | `EMAIL_RETENTION_DAYS` | `7` | Auto-delete after N days |
 | `ALLOW_MULTIPART` | `false` | Accept multipart MIME messages |
+| `WEBHOOK_URL` | — | Optional HTTP webhook for events (Discord-compatible) |
 
 `API_HOST`, `DB_PATH` — optional overrides for the API (defaults: `0.0.0.0`, `/data/mail.db`). Not needed for Docker deploys.
+
+### Webhooks
+
+Set `WEBHOOK_URL` to receive notifications when emails are received or auto-cleaned.
+
+- **Discord**: paste a channel webhook URL (`https://discord.com/api/webhooks/...`). Messages appear as embeds from **MewMail**.
+- **Other endpoints**: receive JSON `{"event":"email.received"|"email.cleaned","timestamp":"...","data":{...}}`.
+
+Delivery is fire-and-forget; failures are logged and do not affect ingest or cleanup.
 
 ## Container images (GHCR)
 

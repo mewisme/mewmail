@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -26,6 +27,7 @@ type Config struct {
 	MaxBodyBytes       int64
 	RequestTimeoutSec  int
 	AllowMultipart     bool
+	WebhookURL         string
 }
 
 // Load reads configuration from the environment.
@@ -61,6 +63,7 @@ func Load() (*Config, error) {
 		MaxBodyBytes:       defaultMaxBodyBytes,
 		RequestTimeoutSec:  defaultRequestTimeoutSec,
 		AllowMultipart:     allowMultipart,
+		WebhookURL:         strings.TrimSpace(os.Getenv("WEBHOOK_URL")),
 	}, nil
 }
 

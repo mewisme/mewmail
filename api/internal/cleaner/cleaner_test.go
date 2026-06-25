@@ -47,7 +47,7 @@ func TestCleaner_DeletesExpired(t *testing.T) {
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	cl := cleaner.New(db, log, 7)
+	cl := cleaner.New(db, log, 7, nil)
 	n, err := cl.CleanOnce(context.Background())
 	if err != nil {
 		t.Fatal(err)

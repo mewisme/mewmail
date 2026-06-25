@@ -18,6 +18,7 @@ import (
 	"mewmail/api/internal/httputil"
 	"mewmail/api/internal/mail"
 	"mewmail/api/internal/middleware"
+	"mewmail/api/internal/webhook"
 )
 
 //go:embed openapi.yaml
@@ -25,10 +26,11 @@ var openAPIFS embed.FS
 
 // Deps holds router dependencies.
 type Deps struct {
-	Config *config.Config
-	DB     *database.DB
-	Log    *slog.Logger
-	APIKey string
+	Config  *config.Config
+	DB      *database.DB
+	Log     *slog.Logger
+	APIKey  string
+	Webhook *webhook.Client
 }
 
 // New builds the HTTP router.
@@ -48,7 +50,7 @@ func New(d Deps) http.Handler {
 	r.Get("/swagger", swaggerUIHandler)
 	r.Get("/swagger/openapi.yaml", openAPIHandler)
 
-	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Config.AllowMultipart)
+	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Config.AllowMultipart, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
 
 	r.Route("/emails", func(r chi.Router) {

@@ -15,6 +15,7 @@ import (
 	"mewmail/api/internal/config"
 	"mewmail/api/internal/database"
 	"mewmail/api/internal/router"
+	"mewmail/api/internal/webhook"
 )
 
 func main() {
@@ -42,16 +43,18 @@ func main() {
 	}
 	defer db.Close()
 
+	wh := webhook.New(cfg.WebhookURL, log)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cl := cleaner.New(db, log, cfg.EmailRetentionDays)
+	cl := cleaner.New(db, log, cfg.EmailRetentionDays, wh)
 	go cl.Run(ctx)
 
 	addr := fmt.Sprintf("%s:%s", cfg.APIHost, cfg.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      router.New(router.Deps{Config: cfg, DB: db, Log: log, APIKey: apiKey}),
+		Handler:      router.New(router.Deps{Config: cfg, DB: db, Log: log, APIKey: apiKey, Webhook: wh}),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

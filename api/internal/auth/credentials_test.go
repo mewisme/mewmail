@@ -22,8 +22,8 @@ func TestLoadOrCreateAPIKey_GenerateAndReload(t *testing.T) {
 	if !generated {
 		t.Fatal("expected generated=true on first run")
 	}
-	if len(key1) != 64 {
-		t.Fatalf("expected 64-char hex key, got len %d", len(key1))
+	if len(key1) != 32 {
+		t.Fatalf("expected 32-char hex key, got len %d", len(key1))
 	}
 
 	if runtime.GOOS != "windows" {

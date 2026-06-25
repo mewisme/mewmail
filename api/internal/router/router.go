@@ -81,7 +81,7 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net")
-	_, _ = w.Write([]byte(`<!DOCTYPE html>
+	fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -91,8 +91,8 @@ func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 <div id="swagger-ui"></div>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-<script src="/swagger/init.js"></script>
-</body></html>`))
+<script src="/swagger/init.js?v=%d"></script>
+</body></html>`, time.Now().Unix())
 }
 
 func swaggerInitHandler(w http.ResponseWriter, _ *http.Request) {

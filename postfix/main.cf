@@ -4,7 +4,7 @@ smtpd_banner = $myhostname ESMTP
 biff = no
 append_dot_mydomain = no
 readme_directory = no
-compatibility_level = 2
+compatibility_level = 3.6
 
 # Receive only — never relay
 inet_interfaces = all

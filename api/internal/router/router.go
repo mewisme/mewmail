@@ -97,16 +97,26 @@ func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 
 func swaggerInitHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	_, _ = w.Write([]byte(`window.onload = function() {
-  if (!window.SwaggerUIBundle) {
-    document.body.innerHTML = "SwaggerUIBundle not loaded";
-    return;
-  }
+	_, _ = w.Write([]byte(`window.onload = async () => {
+  const text = await fetch("/swagger/openapi.yaml").then(r => r.text());
+  const spec = jsyaml.load(text);
+
+  // Ghi đè servers
+  spec.servers = [
+    {
+      url: window.location.origin,
+      description: "Current browser"
+    }
+  ];
+
   SwaggerUIBundle({
-    url: window.location.origin + "/swagger/openapi.yaml",
+    spec: spec,
     dom_id: "#swagger-ui",
     deepLinking: true,
-    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+    presets: [
+      SwaggerUIBundle.presets.apis,
+      SwaggerUIStandalonePreset
+    ],
     layout: "StandaloneLayout"
   });
 };`))

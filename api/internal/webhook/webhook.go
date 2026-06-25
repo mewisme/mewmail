@@ -18,16 +18,18 @@ const (
 
 // Client posts event notifications to WEBHOOK_URL.
 type Client struct {
-	url     string
-	http    *http.Client
-	log     *slog.Logger
-	discord bool
+	url       string
+	publicURL string
+	http      *http.Client
+	log       *slog.Logger
+	discord   bool
 }
 
 // New returns a webhook client. Empty url disables notifications.
-func New(url string, log *slog.Logger) *Client {
+func New(url, publicURL string, log *slog.Logger) *Client {
 	return &Client{
-		url: strings.TrimSpace(url),
+		url:       strings.TrimSpace(url),
+		publicURL: strings.TrimRight(strings.TrimSpace(publicURL), "/"),
 		http: &http.Client{
 			Timeout: requestTimeout,
 		},
@@ -42,7 +44,7 @@ func (c *Client) Enabled() bool {
 }
 
 // EmailReceived notifies that a new email was stored.
-func (c *Client) EmailReceived(id int64, from, to, subject, messageID string) {
+func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOTK string) {
 	if !c.Enabled() {
 		return
 	}
@@ -54,13 +56,25 @@ func (c *Client) EmailReceived(id int64, from, to, subject, messageID string) {
 		"subject":    subject,
 		"message_id": messageID,
 	}
-	go c.send("email.received", "Email received", 0x57F287, now, []field{
+	fields := []field{
 		{"ID", fmt.Sprintf("%d", id), true},
 		{"From", from, true},
 		{"To", to, true},
 		{"Subject", truncate(subject, 256), false},
 		{"Message-ID", truncate(messageID, 256), false},
-	}, data)
+	}
+	if previewURL := c.previewURL(id, previewOTK); previewURL != "" {
+		data["preview_url"] = previewURL
+		fields = append(fields, field{"Preview", previewURL, false})
+	}
+	go c.send("email.received", "Email received", 0x57F287, now, fields, data)
+}
+
+func (c *Client) previewURL(id int64, otk string) string {
+	if c.publicURL == "" || otk == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/emails/preview/%d?otk=%s", c.publicURL, id, otk)
 }
 
 // EmailsCleaned notifies that expired emails were deleted.

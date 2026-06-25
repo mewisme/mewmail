@@ -1,6 +1,10 @@
 package database
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+)
 
 func migrate(conn *sql.DB) error {
 	schema := `
@@ -31,6 +35,16 @@ CREATE INDEX IF NOT EXISTS idx_emails_mail_from ON emails(mail_from);
 CREATE INDEX IF NOT EXISTS idx_emails_rcpt_to ON emails(rcpt_to);
 CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);
 `
-	_, err := conn.Exec(schema)
+	if _, err := conn.Exec(schema); err != nil {
+		return err
+	}
+	return addColumnIfMissing(conn, "emails", "preview_otk", "TEXT")
+}
+
+func addColumnIfMissing(conn *sql.DB, table, column, typ string) error {
+	_, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, typ))
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+		return nil
+	}
 	return err
 }

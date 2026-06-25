@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"mewmail/api/internal/auth"
 	"mewmail/api/internal/models"
 )
 
@@ -22,37 +23,56 @@ type EmailFilter struct {
 }
 
 // InsertEmail stores an email and its attachment metadata in a transaction.
-func (db *DB) InsertEmail(ctx context.Context, e *models.Email) (int64, error) {
+// Returns the new row id and a one-time preview token.
+func (db *DB) InsertEmail(ctx context.Context, e *models.Email) (int64, string, error) {
+	previewOTK, err := auth.GenerateToken()
+	if err != nil {
+		return 0, "", err
+	}
+
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer tx.Rollback()
 
 	created := e.CreatedAt.UTC().Format(time.RFC3339)
 	res, err := tx.StmtContext(ctx, db.insertEmail).ExecContext(ctx,
 		e.MessageID, e.MailFrom, e.RcptTo, e.Subject, e.MailDate,
-		e.TextBody, e.HTMLBody, e.HeadersJSON, e.RawEmail, created,
+		e.TextBody, e.HTMLBody, e.HeadersJSON, e.RawEmail, created, previewOTK,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("insert email: %w", err)
+		return 0, "", fmt.Errorf("insert email: %w", err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	insAttach := tx.StmtContext(ctx, db.insertAttach)
 	for _, a := range e.Attachments {
 		if _, err := insAttach.ExecContext(ctx, id, a.Filename, a.ContentType, a.Size); err != nil {
-			return 0, fmt.Errorf("insert attachment: %w", err)
+			return 0, "", fmt.Errorf("insert attachment: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	return id, nil
+	return id, previewOTK, nil
+}
+
+// ConsumePreviewOTK validates a one-time preview token and clears it.
+func (db *DB) ConsumePreviewOTK(ctx context.Context, id int64, otk string) (bool, error) {
+	if otk == "" {
+		return false, nil
+	}
+	res, err := db.consumeOTK.ExecContext(ctx, id, otk)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // GetEmail returns a single email by ID.

@@ -27,6 +27,7 @@ type Config struct {
 	MaxBodyBytes        int64
 	RequestTimeoutSec   int
 	WebhookURL          string
+	PublicURL           string
 }
 
 // Load reads configuration from the environment.
@@ -53,6 +54,7 @@ func Load() (*Config, error) {
 		MaxBodyBytes:        defaultMaxBodyBytes,
 		RequestTimeoutSec:   defaultRequestTimeoutSec,
 		WebhookURL:          strings.TrimSpace(os.Getenv("WEBHOOK_URL")),
+		PublicURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/"),
 	}, nil
 }
 

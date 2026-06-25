@@ -43,7 +43,7 @@ func main() {
 	}
 	defer db.Close()
 
-	wh := webhook.New(cfg.WebhookURL, log)
+	wh := webhook.New(cfg.WebhookURL, cfg.PublicURL, log)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

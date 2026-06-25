@@ -53,7 +53,7 @@ func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.DB.InsertEmail(r.Context(), email)
+	id, previewOTK, err := h.DB.InsertEmail(r.Context(), email)
 	if err != nil {
 		h.Log.Error("insert email failed", "error", err)
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to store email")
@@ -69,7 +69,7 @@ func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if h.Webhook != nil {
-		h.Webhook.EmailReceived(id, email.MailFrom, email.RcptTo, email.Subject, email.MessageID)
+		h.Webhook.EmailReceived(id, email.MailFrom, email.RcptTo, email.Subject, email.MessageID, previewOTK)
 	}
 
 	httputil.WriteSuccess(w, http.StatusCreated, map[string]any{"id": id})

@@ -49,9 +49,14 @@ func LoadOrCreateAPIKey(path string) (string, bool, error) {
 }
 
 func generateKey() (string, error) {
+	return GenerateToken()
+}
+
+// GenerateToken returns a random hex token (16 bytes).
+func GenerateToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate key: %w", err)
+		return "", fmt.Errorf("generate token: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }

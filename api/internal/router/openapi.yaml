@@ -112,7 +112,7 @@ paths:
   /emails/preview/{id}:
     get:
       summary: Preview email in browser
-      description: Human-readable HTML view. Authenticate with the `apikey` query parameter instead of Bearer auth.
+      description: Human-readable HTML view. Use `apikey` (reusable) or `otk` (one-time token from webhook).
       security: []
       parameters:
         - name: id
@@ -122,7 +122,11 @@ paths:
             type: integer
         - name: apikey
           in: query
-          required: true
+          schema:
+            type: string
+        - name: otk
+          in: query
+          description: One-time preview token (invalid after first view or email deletion)
           schema:
             type: string
       responses:
@@ -133,7 +137,7 @@ paths:
               schema:
                 type: string
         "401":
-          description: Invalid or missing apikey
+          description: Invalid or missing credentials
         "404":
           description: Not found
 components:

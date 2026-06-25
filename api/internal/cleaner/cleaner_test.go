@@ -39,10 +39,10 @@ func TestCleaner_DeletesExpired(t *testing.T) {
 		CreatedAt:   time.Now().UTC(),
 	}
 
-	if _, err := db.InsertEmail(context.Background(), old); err != nil {
+	if _, _, err := db.InsertEmail(context.Background(), old); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.InsertEmail(context.Background(), newer); err != nil {
+	if _, _, err := db.InsertEmail(context.Background(), newer); err != nil {
 		t.Fatal(err)
 	}
 

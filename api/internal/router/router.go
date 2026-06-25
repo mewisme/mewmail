@@ -59,8 +59,8 @@ func New(d Deps) http.Handler {
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
 
-	h := &emailHandlers{db: d.DB, log: d.Log}
-	r.With(auth.QueryAPIKeyAuth(d.APIKey, d.Log)).Get("/emails/preview/{id}", h.preview)
+	h := &emailHandlers{db: d.DB, log: d.Log, apiKey: d.APIKey}
+	r.Get("/emails/preview/{id}", h.preview)
 
 	r.Route("/emails", func(r chi.Router) {
 		r.Use(auth.BearerAuth(d.APIKey, d.Log))
@@ -123,8 +123,9 @@ func openAPIHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 type emailHandlers struct {
-	db  *database.DB
-	log *slog.Logger
+	db     *database.DB
+	log    *slog.Logger
+	apiKey string
 }
 
 func (h *emailHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +188,27 @@ func (h *emailHandlers) preview(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+	q := r.URL.Query()
+	switch {
+	case auth.ValidAPIKey(q.Get("apikey"), h.apiKey):
+	case q.Get("otk") != "":
+		ok, err := h.db.ConsumePreviewOTK(r.Context(), id, q.Get("otk"))
+		if err != nil {
+			h.log.Error("preview otk failed", "error", err)
+			httputil.WriteError(w, http.StatusInternalServerError, "failed to authorize preview")
+			return
+		}
+		if !ok {
+			h.log.Warn("preview auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
+			httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+	default:
+		h.log.Warn("preview auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
+		httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	email, err := h.db.GetEmail(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

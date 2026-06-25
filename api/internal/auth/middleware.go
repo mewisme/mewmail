@@ -18,6 +18,11 @@ func validAPIKey(provided, expected string) bool {
 	return provided != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
+// ValidAPIKey reports whether provided matches expected (constant-time).
+func ValidAPIKey(provided, expected string) bool {
+	return validAPIKey(provided, expected)
+}
+
 // BearerAuth validates Authorization: Bearer <apiKey>.
 func BearerAuth(apiKey string, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

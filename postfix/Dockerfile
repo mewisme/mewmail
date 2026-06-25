@@ -1,8 +1,7 @@
 FROM alpine:3.21
 
 RUN apk add --no-cache postfix curl ca-certificates \
-    && postfix set-permissions \
-    && mkdir -p /var/spool/postfix/pid
+    && mkdir -p /var/spool/postfix/pid /var/spool/postfix/private /var/spool/postfix/public
 
 COPY main.cf /etc/postfix/main.cf
 COPY master.cf /etc/postfix/master.cf

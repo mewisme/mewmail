@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -25,8 +24,10 @@ import (
 	"mewmail/api/internal/webhook"
 )
 
-//go:embed openapi.yaml
+//go:embed openapi.yaml static/swagger/*
 var openAPIFS embed.FS
+
+var swaggerFS = openAPIFS
 
 // Deps holds router dependencies.
 type Deps struct {
@@ -51,10 +52,7 @@ func New(d Deps) http.Handler {
 	r.Use(middleware.RateLimit(120, time.Minute))
 
 	r.Get("/health", healthHandler)
-	r.Get("/swagger", swaggerUIHandler)
-	r.Get("/swagger/", swaggerUIHandler)
-	r.Get("/swagger/init.js", swaggerInitHandler)
-	r.Get("/swagger/openapi.yaml", openAPIHandler)
+	mountSwagger(r)
 
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
@@ -76,60 +74,6 @@ func New(d Deps) http.Handler {
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	httputil.WriteSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net")
-	fmt.Fprintf(w, `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MewMailAPI</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui.css">
-</head><body>
-<div id="swagger-ui"></div>
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-<script src="/swagger/init.js?v=%d"></script>
-</body></html>`, time.Now().Unix())
-}
-
-func swaggerInitHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	_, _ = w.Write([]byte(`window.onload = async () => {
-  const text = await fetch("/swagger/openapi.yaml").then(r => r.text());
-  const spec = jsyaml.load(text);
-
-  // Ghi đè servers
-  spec.servers = [
-    {
-      url: window.location.origin,
-      description: "Current browser"
-    }
-  ];
-
-  SwaggerUIBundle({
-    spec: spec,
-    dom_id: "#swagger-ui",
-    deepLinking: true,
-    presets: [
-      SwaggerUIBundle.presets.apis,
-      SwaggerUIStandalonePreset
-    ],
-    layout: "StandaloneLayout"
-  });
-};`))
-}
-
-func openAPIHandler(w http.ResponseWriter, _ *http.Request) {
-	data, err := fs.ReadFile(openAPIFS, "openapi.yaml")
-	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "spec not found")
-		return
-	}
-	w.Header().Set("Content-Type", "application/yaml")
-	_, _ = w.Write(data)
 }
 
 type emailHandlers struct {

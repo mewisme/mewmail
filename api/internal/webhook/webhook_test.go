@@ -38,7 +38,7 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Username != "MewMail" || len(payload.Embeds) != 1 {
+	if payload.Username != "MewMail" || payload.AvatarURL != "https://github.com/mewisme.png" || len(payload.Embeds) != 1 {
 		t.Fatalf("unexpected payload: %+v", payload)
 	}
 	embed := payload.Embeds[0]

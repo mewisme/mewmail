@@ -13,6 +13,7 @@ import (
 
 const (
 	username       = "MewMail"
+	avatarURL      = "https://github.com/mewisme.png"
 	requestTimeout = 10 * time.Second
 )
 
@@ -190,8 +191,9 @@ func (c *Client) actionLinks(id int64, otk string) string {
 
 func (c *Client) postDiscord(embed discordEmbed) {
 	body, err := json.Marshal(discordPayload{
-		Username: username,
-		Embeds:   []discordEmbed{embed},
+		Username:  username,
+		AvatarURL: avatarURL,
+		Embeds:    []discordEmbed{embed},
 	})
 	if err != nil {
 		c.log.Error("webhook marshal failed", "error", err)
@@ -237,8 +239,9 @@ func (c *Client) post(body []byte) {
 }
 
 type discordPayload struct {
-	Username string         `json:"username"`
-	Embeds   []discordEmbed `json:"embeds"`
+	Username  string         `json:"username"`
+	AvatarURL string         `json:"avatar_url,omitempty"`
+	Embeds    []discordEmbed `json:"embeds"`
 }
 
 type discordEmbed struct {

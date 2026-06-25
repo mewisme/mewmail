@@ -76,6 +76,7 @@ From the host (API mapped to `PORT` in `.env`, default `8080`):
 ```bash
 curl -s http://localhost:8080/health
 curl -s -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/emails?limit=10"
+curl -s -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/emails/latest?limit=5"
 ```
 
 From the Docker network:

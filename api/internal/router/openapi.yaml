@@ -65,6 +65,37 @@ paths:
       responses:
         "200":
           description: Deleted count
+  /emails/latest:
+    get:
+      summary: Latest emails (newest first)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 200
+      responses:
+        "200":
+          description: Latest emails
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          emails:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Email"
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
   /emails/{id}:
     get:
       summary: Get email by ID

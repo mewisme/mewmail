@@ -48,6 +48,7 @@ func New(d Deps) http.Handler {
 
 	r.Get("/health", healthHandler)
 	r.Get("/swagger", swaggerUIHandler)
+	r.Get("/swagger/", swaggerUIHandler)
 	r.Get("/swagger/openapi.yaml", openAPIHandler)
 
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
@@ -57,6 +58,7 @@ func New(d Deps) http.Handler {
 		r.Use(auth.BearerAuth(d.APIKey, d.Log))
 		h := &emailHandlers{db: d.DB, log: d.Log}
 		r.Get("/", h.list)
+		r.Get("/latest", h.latest)
 		r.Get("/{id}", h.get)
 		r.Delete("/", h.deleteMany)
 		r.Delete("/{id}", h.deleteOne)
@@ -71,15 +73,28 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 
 func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'")
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
-<html><head>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MewMailAPI</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui.css">
 </head><body>
 <div id="swagger-ui"></div>
-<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({url:"/swagger/openapi.yaml",dom_id:"#swagger-ui"})</script>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
+<script>
+window.onload = function() {
+  SwaggerUIBundle({
+    url: "/swagger/openapi.yaml",
+    dom_id: "#swagger-ui",
+    deepLinking: true,
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+    layout: "StandaloneLayout"
+  });
+};
+</script>
 </body></html>`))
 }
 
@@ -115,6 +130,29 @@ func (h *emailHandlers) list(w http.ResponseWriter, r *http.Request) {
 		"total":  total,
 		"limit":  f.Limit,
 		"offset": f.Offset,
+	})
+}
+
+func (h *emailHandlers) latest(w http.ResponseWriter, r *http.Request) {
+	limit := 10
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		limit = n
+	}
+	emails, total, err := h.db.ListEmails(r.Context(), database.EmailFilter{Limit: limit})
+	if err != nil {
+		h.log.Error("list latest emails failed", "error", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to list emails")
+		return
+	}
+	httputil.WriteSuccess(w, http.StatusOK, map[string]any{
+		"emails": emails,
+		"total":  total,
+		"limit":  limit,
 	})
 }
 

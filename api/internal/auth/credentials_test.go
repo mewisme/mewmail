@@ -96,3 +96,38 @@ func TestBearerAuth(t *testing.T) {
 		}
 	})
 }
+
+func TestQueryAPIKeyAuth(t *testing.T) {
+	const apiKey = "test-api-key-secret"
+	log := testLogger()
+	handler := auth.QueryAPIKeyAuth(apiKey, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Run("missing apikey", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/emails/preview/1", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("status %d", rr.Code)
+		}
+	})
+
+	t.Run("wrong apikey", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/emails/preview/1?apikey=wrong", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("status %d", rr.Code)
+		}
+	})
+
+	t.Run("valid apikey", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/emails/preview/1?apikey="+apiKey, nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status %d", rr.Code)
+		}
+	})
+}

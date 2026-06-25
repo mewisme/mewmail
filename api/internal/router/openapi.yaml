@@ -109,6 +109,33 @@ paths:
           description: Deleted
         "404":
           description: Not found
+  /emails/preview/{id}:
+    get:
+      summary: Preview email in browser
+      description: Human-readable HTML view. Authenticate with the `apikey` query parameter instead of Bearer auth.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: apikey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML preview page
+          content:
+            text/html:
+              schema:
+                type: string
+        "401":
+          description: Invalid or missing apikey
+        "404":
+          description: Not found
 components:
   securitySchemes:
     bearerAuth:

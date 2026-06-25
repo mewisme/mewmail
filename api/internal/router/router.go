@@ -4,10 +4,13 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
+	"fmt"
+	"html"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +21,7 @@ import (
 	"mewmail/api/internal/httputil"
 	"mewmail/api/internal/mail"
 	"mewmail/api/internal/middleware"
+	"mewmail/api/internal/models"
 	"mewmail/api/internal/webhook"
 )
 
@@ -55,9 +59,11 @@ func New(d Deps) http.Handler {
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
 
+	h := &emailHandlers{db: d.DB, log: d.Log}
+	r.With(auth.QueryAPIKeyAuth(d.APIKey, d.Log)).Get("/emails/preview/{id}", h.preview)
+
 	r.Route("/emails", func(r chi.Router) {
 		r.Use(auth.BearerAuth(d.APIKey, d.Log))
-		h := &emailHandlers{db: d.DB, log: d.Log}
 		r.Get("/", h.list)
 		r.Get("/latest", h.latest)
 		r.Get("/{id}", h.get)
@@ -175,6 +181,27 @@ func (h *emailHandlers) latest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *emailHandlers) preview(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	email, err := h.db.GetEmail(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			httputil.WriteError(w, http.StatusNotFound, "email not found")
+			return
+		}
+		h.log.Error("preview email failed", "error", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to get email")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data: https: http:; frame-src 'self'")
+	_, _ = w.Write([]byte(renderEmailPreview(email)))
+}
+
 func (h *emailHandlers) get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -283,4 +310,57 @@ type filterError struct{ field string }
 
 func (e *filterError) Error() string {
 	return "invalid " + e.field
+}
+
+func renderEmailPreview(e *models.Email) string {
+	var b strings.Builder
+	title := e.Subject
+	if title == "" {
+		title = fmt.Sprintf("Email #%d", e.ID)
+	}
+	fmt.Fprintf(&b, `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>%s</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0 auto;padding:1rem 1.5rem;max-width:960px;color:#111}
+.meta{border-bottom:1px solid #ddd;padding-bottom:1rem;margin-bottom:1rem}
+.meta dt{font-weight:600;color:#555;margin-top:.5rem}
+.meta dd{margin:0}
+iframe{width:100%%;min-height:480px;border:1px solid #ddd;border-radius:4px}
+pre{white-space:pre-wrap;word-break:break-word;background:#f6f6f6;padding:1rem;border-radius:4px}
+.attachments{margin-top:1rem;font-size:.9rem;color:#555}
+.empty{color:#888;font-style:italic}
+</style>
+</head><body>
+<h1>%s</h1>
+<dl class="meta">
+<dt>From</dt><dd>%s</dd>
+<dt>To</dt><dd>%s</dd>
+<dt>Date</dt><dd>%s</dd>
+</dl>
+`, html.EscapeString(title), html.EscapeString(title),
+		html.EscapeString(e.MailFrom), html.EscapeString(e.RcptTo), html.EscapeString(e.MailDate))
+
+	switch {
+	case e.HTMLBody != "":
+		fmt.Fprintf(&b, `<iframe sandbox="" srcdoc="%s"></iframe>`, html.EscapeString(e.HTMLBody))
+	case e.TextBody != "":
+		fmt.Fprintf(&b, `<pre>%s</pre>`, html.EscapeString(e.TextBody))
+	default:
+		b.WriteString(`<p class="empty">(no body)</p>`)
+	}
+
+	if len(e.Attachments) > 0 {
+		b.WriteString(`<div class="attachments"><strong>Attachments:</strong><ul>`)
+		for _, a := range e.Attachments {
+			fmt.Fprintf(&b, `<li>%s (%s, %d bytes)</li>`,
+				html.EscapeString(a.Filename), html.EscapeString(a.ContentType), a.Size)
+		}
+		b.WriteString(`</ul></div>`)
+	}
+
+	b.WriteString(`</body></html>`)
+	return b.String()
 }

@@ -21,6 +21,12 @@ type IngestHandler struct {
 // ServeHTTP ingests a raw RFC822 message.
 func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rcptTo := r.Header.Get("X-Envelope-To")
+	h.Log.Info("ingest called",
+		"rcpt", rcptTo,
+		"remote", r.RemoteAddr,
+		"content_length", r.ContentLength,
+	)
+
 	if rcptTo == "" {
 		httputil.WriteError(w, http.StatusBadRequest, "missing X-Envelope-To header")
 		return

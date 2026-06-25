@@ -19,6 +19,7 @@ services:
     env_file: .env
     environment:
       DOMAIN: ${DOMAIN}
+      PORT: ${PORT:-8080}
     volumes:
       - ./data:/data:ro
     ports:

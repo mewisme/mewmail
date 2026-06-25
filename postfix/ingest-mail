@@ -1,23 +1,67 @@
 #!/bin/sh
-set -eu
-RCPT="${1:?recipient required}"
+# Postfix pipe → Go API. Logs to stderr (visible in docker logs / mail.log).
 
-CRED="${CREDENTIALS_PATH:-/data/.credentials}"
-if [ ! -f "$CRED" ]; then
-  echo "credentials file not found: $CRED" >&2
-  exit 1
+RCPT="${1:-}"
+log() { printf 'ingest-mail: %s\n' "$*" >&2; }
+
+log "called rcpt=${RCPT:-<empty>} pid=$$ user=$(id -un 2>/dev/null || id -u)"
+
+if [ -z "$RCPT" ]; then
+	log "ERROR missing recipient argument"
+	exit 75
 fi
 
-TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+CRED="${CREDENTIALS_PATH:-/data/.credentials}"
+TOKEN_FILE=/var/spool/postfix/.ingest-token
+TOKEN=""
+
+if [ -r "$TOKEN_FILE" ]; then
+	TOKEN=$(cat "$TOKEN_FILE")
+	log "using token from $TOKEN_FILE"
+elif [ -r "$CRED" ]; then
+	TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+	log "using token from $CRED"
+else
+	log "ERROR cannot read credentials ($CRED) or token file ($TOKEN_FILE); postfix runs as $(id -un 2>/dev/null || id -u)"
+	log "ERROR ensure api is up and restart postfix after first api start"
+	exit 75
+fi
+
 if [ -z "$TOKEN" ]; then
-  echo "api_key not found in $CRED" >&2
-  exit 1
+	log "ERROR api_key is empty"
+	exit 75
 fi
 
 PORT="${PORT:-8080}"
-curl -fsS -X POST \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: message/rfc822" \
-  -H "X-Envelope-To: ${RCPT}" \
-  --data-binary @- \
-  "http://api:${PORT}/internal/ingest"
+URL="http://api:${PORT}/internal/ingest"
+TMP=$(mktemp)
+RESP=$(mktemp)
+trap 'rm -f "$TMP" "$RESP"' EXIT
+
+if ! cat >"$TMP"; then
+	log "ERROR failed to read message from stdin"
+	exit 75
+fi
+
+BYTES=$(wc -c <"$TMP" | tr -d ' ')
+log "posting ${BYTES} bytes to ${URL}"
+
+HTTP=$(curl -sS -o "$RESP" -w '%{http_code}' \
+	-X POST \
+	-H "Authorization: Bearer ${TOKEN}" \
+	-H "Content-Type: message/rfc822" \
+	-H "X-Envelope-To: ${RCPT}" \
+	--data-binary @"$TMP" \
+	"$URL") || {
+	log "ERROR curl failed exit=$?"
+	exit 75
+}
+
+BODY=$(tr -d '\n' <"$RESP" | head -c 200)
+log "api response http=${HTTP} body=${BODY}"
+
+case "$HTTP" in
+201) log "ok rcpt=${RCPT} bytes=${BYTES}"; exit 0 ;;
+401) log "ERROR unauthorized — api_key mismatch, restart postfix after api generates credentials"; exit 75 ;;
+*) log "ERROR ingest failed http=${HTTP}"; exit 75 ;;
+esac

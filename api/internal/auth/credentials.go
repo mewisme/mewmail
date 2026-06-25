@@ -41,7 +41,8 @@ func LoadOrCreateAPIKey(path string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	if err := os.WriteFile(path, out, 0o600); err != nil {
+	// ponytail: 0644 so postfix pipe (nobody) can read shared Docker volume
+	if err := os.WriteFile(path, out, 0o644); err != nil {
 		return "", false, fmt.Errorf("write credentials: %w", err)
 	}
 	return key, true, nil

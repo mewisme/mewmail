@@ -34,6 +34,26 @@ fi
 postfix set-permissions
 postfix check
 
+# Copy api_key for pipe user (nobody cannot read 0600 files from api container)
+ingest_refresh_token() {
+	CRED="${CREDENTIALS_PATH:-/data/.credentials}"
+	TOKEN_FILE=/var/spool/postfix/.ingest-token
+	if [ ! -f "$CRED" ]; then
+		echo "WARN: $CRED not found — start api first, then restart postfix" >&2
+		return 0
+	fi
+	TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+	if [ -z "$TOKEN" ]; then
+		echo "WARN: api_key missing in $CRED" >&2
+		return 0
+	fi
+	printf '%s' "$TOKEN" >"$TOKEN_FILE"
+	chown nobody:nobody "$TOKEN_FILE"
+	chmod 400 "$TOKEN_FILE"
+	echo "ingest token ready at $TOKEN_FILE" >&2
+}
+ingest_refresh_token
+
 echo "=== Postfix effective configuration (postconf -n) ==="
 postconf -n
 echo "=== virtual_mailbox map ==="

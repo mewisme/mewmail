@@ -54,6 +54,20 @@ ingest_refresh_token() {
 }
 ingest_refresh_token
 
+API_PORT="${PORT:-8080}"
+API_HOST="${API_SERVICE_HOST:-api}"
+PORT_FILE=/var/spool/postfix/.ingest-port
+HOST_FILE=/var/spool/postfix/.ingest-host
+printf '%s' "$API_PORT" >"$PORT_FILE"
+printf '%s' "$API_HOST" >"$HOST_FILE"
+chown nobody:nobody "$PORT_FILE" "$HOST_FILE"
+chmod 444 "$PORT_FILE" "$HOST_FILE"
+echo "ingest target http://${API_HOST}:${API_PORT}/internal/ingest" >&2
+
+if ! curl -fsS --max-time 5 "http://${API_HOST}:${API_PORT}/health" >/dev/null; then
+	echo "WARN: api not reachable at http://${API_HOST}:${API_PORT}/health — mail will queue until api is up" >&2
+fi
+
 echo "=== Postfix effective configuration (postconf -n) ==="
 postconf -n
 echo "=== virtual_mailbox map ==="

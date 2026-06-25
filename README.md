@@ -132,7 +132,7 @@ OpenAPI 3 spec and UI (internal network):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DOMAIN` | — | Mail domain for Postfix (catch-all) |
-| `PORT` | `8080` | API listen port (host + container) |
+| `PORT` | `8080` | API listen port (host + container). Changing this requires `docker compose up -d --force-recreate` so Postfix picks up the new port (written to `/var/spool/postfix/.ingest-port` at startup). |
 | `EMAIL_RETENTION_DAYS` | `7` | Auto-delete after N days |
 | `ALLOW_MULTIPART` | `false` | Accept multipart MIME messages |
 | `WEBHOOK_URL` | — | Optional HTTP webhook for events (Discord-compatible) |

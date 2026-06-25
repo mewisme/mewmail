@@ -25,6 +25,9 @@ virtual_mailbox_domains = __DOMAIN__
 virtual_mailbox_maps = lmdb:/etc/postfix/virtual_mailbox
 virtual_transport = mewmail:
 
+# Pipe children (ingest-mail) do not inherit the shell env; import + spool files
+import_environment = PORT CREDENTIALS_PATH
+
 local_transport = error:local delivery disabled
 default_transport = error:outbound delivery disabled
 

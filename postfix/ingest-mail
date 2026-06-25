@@ -32,8 +32,26 @@ if [ -z "$TOKEN" ]; then
 	exit 75
 fi
 
-PORT="${PORT:-8080}"
-URL="http://api:${PORT}/internal/ingest"
+API_HOST="${API_SERVICE_HOST:-api}"
+PORT_FILE=/var/spool/postfix/.ingest-port
+HOST_FILE=/var/spool/postfix/.ingest-host
+
+if [ -r "$PORT_FILE" ]; then
+	API_PORT=$(tr -d ' \r\n' <"$PORT_FILE")
+	log "using api port from $PORT_FILE ($API_PORT)"
+elif [ -n "${PORT:-}" ]; then
+	API_PORT=$PORT
+	log "using api port from env PORT ($API_PORT)"
+else
+	API_PORT=8080
+	log "using default api port ($API_PORT)"
+fi
+
+if [ -r "$HOST_FILE" ]; then
+	API_HOST=$(tr -d ' \r\n' <"$HOST_FILE")
+fi
+
+URL="http://${API_HOST}:${API_PORT}/internal/ingest"
 TMP=$(mktemp)
 RESP=$(mktemp)
 trap 'rm -f "$TMP" "$RESP"' EXIT

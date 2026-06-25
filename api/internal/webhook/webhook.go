@@ -56,22 +56,39 @@ func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOT
 		"subject":    subject,
 		"message_id": messageID,
 	}
-	fields := []field{
-		{"ID", fmt.Sprintf("%d", id), true},
-		{"From", from, true},
-		{"To", to, true},
-		{"Subject", truncate(subject, 256), false},
-		{"Message-ID", truncate(messageID, 256), false},
-	}
 	if previewURL := c.previewURL(id, previewOTK); previewURL != "" {
 		data["preview_url"] = previewURL
-		fields = append(fields, field{"Preview", discordLink("Preview", previewURL), false})
 	}
 	if keepURL := c.keepURL(id, previewOTK); keepURL != "" {
 		data["keep_url"] = keepURL
-		fields = append(fields, field{"Keep", discordLink("Keep", keepURL), false})
 	}
-	go c.send("email.received", "Email received", 0x57F287, now, fields, data)
+	if c.discord {
+		go c.postDiscord(c.emailReceivedEmbed(id, from, to, subject, messageID, previewOTK, now))
+		return
+	}
+	go c.postGeneric("email.received", now, data)
+}
+
+// EmailOpened notifies that an email was opened for the first time.
+func (c *Client) EmailOpened(id int64, from, to, subject, messageID, via string, openedAt time.Time) {
+	if !c.Enabled() {
+		return
+	}
+	at := openedAt.UTC()
+	data := map[string]any{
+		"id":         id,
+		"from":       from,
+		"to":         to,
+		"subject":    subject,
+		"message_id": messageID,
+		"opened_at":  at.Format(time.RFC3339),
+		"via":        via,
+	}
+	if c.discord {
+		go c.postDiscord(c.emailOpenedEmbed(id, from, to, subject, via, at))
+		return
+	}
+	go c.postGeneric("email.opened", at, data)
 }
 
 func (c *Client) previewURL(id int64, otk string) string {
@@ -99,55 +116,123 @@ func (c *Client) EmailsCleaned(count int64, cutoff time.Time, retentionHours int
 		"cutoff":          cutoff.Format(time.RFC3339),
 		"retention_hours": retentionHours,
 	}
-	go c.send("email.cleaned", "Emails cleaned", 0xFEE75C, now, []field{
-		{"Deleted", fmt.Sprintf("%d", count), true},
-		{"Older than", cutoff.Format(time.RFC3339), true},
-		{"Retention", fmt.Sprintf("%d hours", retentionHours), true},
-	}, data)
-}
-
-type field struct {
-	name   string
-	value  string
-	inline bool
-}
-
-func (c *Client) send(event, title string, color int, at time.Time, fields []field, data map[string]any) {
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-
-	var body []byte
-	var err error
 	if c.discord {
-		body, err = json.Marshal(buildDiscordPayload(title, color, at, fields))
-	} else {
-		body, err = json.Marshal(map[string]any{
-			"event":     event,
-			"timestamp": at.Format(time.RFC3339),
-			"data":      data,
+		go c.postDiscord(c.emailsCleanedEmbed(count, cutoff, retentionHours, now))
+		return
+	}
+	go c.postGeneric("email.cleaned", now, data)
+}
+
+func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, previewOTK string, at time.Time) discordEmbed {
+	fields := []discordField{
+		{Name: "ID", Value: fmt.Sprintf("`#%d`", id), Inline: true},
+	}
+	if messageID != "" {
+		fields = append(fields, discordField{
+			Name:   "Message-ID",
+			Value:  codeQuote(truncate(messageID, 200)),
+			Inline: false,
 		})
 	}
+	if actions := c.actionLinks(id, previewOTK); actions != "" {
+		fields = append(fields, discordField{Name: "Actions", Value: actions, Inline: false})
+	}
+	return discordEmbed{
+		Title:       displaySubject(subject),
+		Description: fmt.Sprintf("**%s** → **%s**", from, to),
+		Color:       0x57F287,
+		Timestamp:   at.Format(time.RFC3339),
+		Footer:      newDiscordFooter("New email"),
+		Fields:      fields,
+	}
+}
+
+func (c *Client) emailOpenedEmbed(id int64, from, to, subject, via string, at time.Time) discordEmbed {
+	return discordEmbed{
+		Title:       displaySubject(subject),
+		Description: fmt.Sprintf("First opened via **%s**", formatVia(via)),
+		Color:       0x5865F2,
+		Timestamp:   at.Format(time.RFC3339),
+		Footer:      newDiscordFooter("Email opened"),
+		Fields: []discordField{
+			{Name: "From", Value: from, Inline: true},
+			{Name: "To", Value: to, Inline: true},
+			{Name: "ID", Value: fmt.Sprintf("`#%d`", id), Inline: true},
+			{Name: "Opened", Value: formatTime(at), Inline: false},
+		},
+	}
+}
+
+func (c *Client) emailsCleanedEmbed(count int64, cutoff time.Time, retentionHours int, at time.Time) discordEmbed {
+	return discordEmbed{
+		Title:       "Retention cleanup",
+		Description: fmt.Sprintf("**%d** email(s) removed", count),
+		Color:       0xFEE75C,
+		Timestamp:   at.Format(time.RFC3339),
+		Footer:      newDiscordFooter("Cleanup"),
+		Fields: []discordField{
+			{Name: "Older than", Value: formatTime(cutoff), Inline: true},
+			{Name: "Retention", Value: fmt.Sprintf("%d hours", retentionHours), Inline: true},
+		},
+	}
+}
+
+func (c *Client) actionLinks(id int64, otk string) string {
+	var links []string
+	if u := c.previewURL(id, otk); u != "" {
+		links = append(links, discordLink("Open", u))
+	}
+	if u := c.keepURL(id, otk); u != "" {
+		links = append(links, discordLink("Keep", u))
+	}
+	return strings.Join(links, " · ")
+}
+
+func (c *Client) postDiscord(embed discordEmbed) {
+	body, err := json.Marshal(discordPayload{
+		Username: username,
+		Embeds:   []discordEmbed{embed},
+	})
+	if err != nil {
+		c.log.Error("webhook marshal failed", "error", err)
+		return
+	}
+	c.post(body)
+}
+
+func (c *Client) postGeneric(event string, at time.Time, data map[string]any) {
+	body, err := json.Marshal(map[string]any{
+		"event":     event,
+		"timestamp": at.Format(time.RFC3339),
+		"data":      data,
+	})
 	if err != nil {
 		c.log.Error("webhook marshal failed", "event", event, "error", err)
 		return
 	}
+	c.post(body)
+}
+
+func (c *Client) post(body []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
-		c.log.Error("webhook request failed", "event", event, "error", err)
+		c.log.Error("webhook request failed", "error", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		c.log.Error("webhook post failed", "event", event, "error", err)
+		c.log.Error("webhook post failed", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.log.Error("webhook bad status", "event", event, "status", resp.StatusCode)
+		c.log.Error("webhook bad status", "status", resp.StatusCode)
 	}
 }
 
@@ -157,10 +242,12 @@ type discordPayload struct {
 }
 
 type discordEmbed struct {
-	Title     string         `json:"title"`
-	Color     int            `json:"color"`
-	Timestamp string         `json:"timestamp"`
-	Fields    []discordField `json:"fields"`
+	Title       string         `json:"title,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Color       int            `json:"color,omitempty"`
+	Timestamp   string         `json:"timestamp,omitempty"`
+	Fields      []discordField `json:"fields,omitempty"`
+	Footer      *discordFooter `json:"footer,omitempty"`
 }
 
 type discordField struct {
@@ -169,28 +256,42 @@ type discordField struct {
 	Inline bool   `json:"inline,omitempty"`
 }
 
-func buildDiscordPayload(title string, color int, at time.Time, fields []field) discordPayload {
-	embedFields := make([]discordField, len(fields))
-	for i, f := range fields {
-		embedFields[i] = discordField{
-			Name:   f.name,
-			Value:  truncate(f.value, 1024),
-			Inline: f.inline,
-		}
-	}
-	return discordPayload{
-		Username: username,
-		Embeds: []discordEmbed{{
-			Title:     title,
-			Color:     color,
-			Timestamp: at.Format(time.RFC3339),
-			Fields:    embedFields,
-		}},
-	}
+type discordFooter struct {
+	Text string `json:"text"`
+}
+
+func newDiscordFooter(event string) *discordFooter {
+	return &discordFooter{Text: username + " · " + event}
 }
 
 func discordLink(label, url string) string {
 	return fmt.Sprintf("[%s](%s)", label, url)
+}
+
+func displaySubject(subject string) string {
+	if s := strings.TrimSpace(subject); s != "" {
+		return truncate(s, 256)
+	}
+	return "(no subject)"
+}
+
+func formatVia(via string) string {
+	switch via {
+	case "preview":
+		return "Preview link"
+	case "api":
+		return "API"
+	default:
+		return via
+	}
+}
+
+func formatTime(t time.Time) string {
+	return t.UTC().Format("2 Jan 2006, 15:04 UTC")
+}
+
+func codeQuote(s string) string {
+	return "`" + strings.ReplaceAll(s, "`", "'") + "`"
 }
 
 func truncate(s string, max int) string {

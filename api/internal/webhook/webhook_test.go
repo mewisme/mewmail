@@ -41,23 +41,107 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	if payload.Username != "MewMail" || len(payload.Embeds) != 1 {
 		t.Fatalf("unexpected payload: %+v", payload)
 	}
-	if payload.Embeds[0].Title != "Email received" {
-		t.Fatalf("title %q", payload.Embeds[0].Title)
+	embed := payload.Embeds[0]
+	if embed.Title != "hello" {
+		t.Fatalf("title %q", embed.Title)
 	}
-	var preview, keep string
-	for _, f := range payload.Embeds[0].Fields {
+	if embed.Description != "**a@x.com** → **b@x.com**" {
+		t.Fatalf("description %q", embed.Description)
+	}
+	if embed.Footer == nil || embed.Footer.Text != "MewMail · New email" {
+		t.Fatalf("footer %+v", embed.Footer)
+	}
+
+	var id, actions string
+	for _, f := range embed.Fields {
 		switch f.Name {
-		case "Preview":
-			preview = f.Value
-		case "Keep":
-			keep = f.Value
+		case "ID":
+			id = f.Value
+		case "Actions":
+			actions = f.Value
 		}
 	}
-	if preview != "[Preview](https://mail.example.com/emails/preview/7?otk=one-time-token)" {
-		t.Fatalf("preview field %q", preview)
+	if id != "`#7`" {
+		t.Fatalf("id field %q", id)
 	}
-	if keep != "[Keep](https://mail.example.com/emails/7/keep?otk=one-time-token)" {
-		t.Fatalf("keep field %q", keep)
+	wantActions := "[Open](https://mail.example.com/emails/preview/7?otk=one-time-token) · [Keep](https://mail.example.com/emails/7/keep?otk=one-time-token)"
+	if actions != wantActions {
+		t.Fatalf("actions %q", actions)
+	}
+}
+
+func TestEmailOpened_GenericPayload(t *testing.T) {
+	var got atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got.Store(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	c := New(srv.URL, "", log)
+	openedAt := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	c.EmailOpened(9, "a@x.com", "b@x.com", "hi", "<id@x.com>", "preview", openedAt)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for got.Load() == nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	raw, ok := got.Load().([]byte)
+	if !ok {
+		t.Fatal("no webhook received")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["event"] != "email.opened" {
+		t.Fatalf("event %v", payload["event"])
+	}
+	data, _ := payload["data"].(map[string]any)
+	if data["id"].(float64) != 9 || data["via"] != "preview" {
+		t.Fatalf("data %v", data)
+	}
+	if data["opened_at"] != openedAt.Format(time.RFC3339) {
+		t.Fatalf("opened_at %v", data["opened_at"])
+	}
+}
+
+func TestEmailOpened_DiscordPayload(t *testing.T) {
+	var got atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got.Store(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	c := New(srv.URL+"/api/webhooks/1/token", "", log)
+	openedAt := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	c.EmailOpened(9, "a@x.com", "b@x.com", "hi", "<id@x.com>", "preview", openedAt)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for got.Load() == nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	raw, ok := got.Load().([]byte)
+	if !ok {
+		t.Fatal("no webhook received")
+	}
+
+	var payload discordPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	embed := payload.Embeds[0]
+	if embed.Title != "hi" {
+		t.Fatalf("title %q", embed.Title)
+	}
+	if embed.Description != "First opened via **Preview link**" {
+		t.Fatalf("description %q", embed.Description)
 	}
 }
 

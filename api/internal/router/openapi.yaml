@@ -85,6 +85,7 @@ paths:
   /emails/{id}:
     get:
       summary: Get email by ID
+      description: Records first open time in `opened_at` on the initial request.
       parameters:
         - name: id
           in: path
@@ -154,7 +155,7 @@ paths:
   /emails/preview/{id}:
     get:
       summary: Preview email in browser
-      description: Human-readable HTML view. Use `apikey` (reusable) or `otk` (one-time token from webhook).
+      description: Human-readable HTML view. Use `apikey` (reusable) or `otk` (one-time token from webhook). Records first open time in `opened_at`.
       security: []
       parameters:
         - name: id
@@ -269,6 +270,10 @@ components:
         created_at:
           type: string
           format: date-time
+        opened_at:
+          type: string
+          format: date-time
+          description: Set on first open via GET /emails/{id} or preview.
         kept:
           type: boolean
           description: When true, the email is excluded from automatic retention cleanup.

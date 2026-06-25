@@ -57,7 +57,7 @@ func New(d Deps) http.Handler {
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
 
-	h := &emailHandlers{db: d.DB, log: d.Log, apiKey: d.APIKey}
+	h := &emailHandlers{db: d.DB, log: d.Log, apiKey: d.APIKey, webhook: d.Webhook}
 	r.Get("/emails/preview/{id}", h.preview)
 	r.Get("/emails/{id}/keep", h.keep)
 
@@ -78,9 +78,10 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 type emailHandlers struct {
-	db     *database.DB
-	log    *slog.Logger
-	apiKey string
+	db      *database.DB
+	log     *slog.Logger
+	apiKey  string
+	webhook *webhook.Client
 }
 
 func (h *emailHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +147,9 @@ func (h *emailHandlers) preview(w http.ResponseWriter, r *http.Request) {
 	if !h.authorizeEmailLink(w, r, id, true) {
 		return
 	}
+	if !h.trackFirstOpen(w, r, id, "preview") {
+		return
+	}
 
 	email, err := h.db.GetEmail(r.Context(), id)
 	if err != nil {
@@ -166,6 +170,9 @@ func (h *emailHandlers) get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.trackFirstOpen(w, r, id, "api") {
 		return
 	}
 	email, err := h.db.GetEmail(r.Context(), id)
@@ -213,6 +220,29 @@ func (h *emailHandlers) keep(w http.ResponseWriter, r *http.Request) {
 		"status": status,
 		"email":  email,
 	})
+}
+
+func (h *emailHandlers) trackFirstOpen(w http.ResponseWriter, r *http.Request, id int64, via string) bool {
+	status, ok, err := h.db.TrackEmailOpen(r.Context(), id)
+	if err != nil {
+		h.log.Error("track email open failed", "error", err, "id", id)
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to track email open")
+		return false
+	}
+	if !ok {
+		httputil.WriteError(w, http.StatusNotFound, "email not found")
+		return false
+	}
+	if status == "opened" {
+		h.log.Info("email opened", "id", id, "via", via)
+		if h.webhook != nil {
+			email, err := h.db.GetEmail(r.Context(), id)
+			if err == nil && email.OpenedAt != nil {
+				h.webhook.EmailOpened(email.ID, email.MailFrom, email.RcptTo, email.Subject, email.MessageID, via, *email.OpenedAt)
+			}
+		}
+	}
+	return true
 }
 
 func (h *emailHandlers) authorizeEmailLink(w http.ResponseWriter, r *http.Request, id int64, consumeOTK bool) bool {

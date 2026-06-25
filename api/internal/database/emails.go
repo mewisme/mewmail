@@ -127,7 +127,7 @@ func (db *DB) ListEmails(ctx context.Context, f EmailFilter) ([]models.Email, in
 		return nil, 0, err
 	}
 
-	listQ := `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at, kept
+	listQ := `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at, kept, opened_at
 		FROM emails` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	listArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := db.conn.QueryContext(ctx, listQ, listArgs...)
@@ -186,6 +186,32 @@ func (db *DB) KeepEmail(ctx context.Context, id int64) (status string, ok bool, 
 	}
 	if kept != 0 {
 		return "already_kept", true, nil
+	}
+	return "", false, nil
+}
+
+// TrackEmailOpen records the first time an email is opened.
+// Status is "opened" on first call or "already_opened" when unchanged. ok is false if missing.
+func (db *DB) TrackEmailOpen(ctx context.Context, id int64) (status string, ok bool, err error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := db.trackOpen.ExecContext(ctx, now, id)
+	if err != nil {
+		return "", false, err
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		return "opened", true, nil
+	}
+	var openedAt sql.NullString
+	err = db.conn.QueryRowContext(ctx, `SELECT opened_at FROM emails WHERE id = ?`, id).Scan(&openedAt)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if openedAt.Valid {
+		return "already_opened", true, nil
 	}
 	return "", false, nil
 }
@@ -261,21 +287,30 @@ func buildWhere(f EmailFilter) (string, []any) {
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
+func scanEmailFields(e *models.Email, raw []byte, created string, kept int, openedAt sql.NullString) {
+	e.RawEmail = raw
+	e.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	e.Kept = kept != 0
+	if openedAt.Valid {
+		t, _ := time.Parse(time.RFC3339, openedAt.String)
+		e.OpenedAt = &t
+	}
+}
+
 func scanEmailRowFromRow(row *sql.Row) (*models.Email, error) {
 	var e models.Email
 	var created string
 	var raw []byte
 	var kept int
+	var openedAt sql.NullString
 	err := row.Scan(
 		&e.ID, &e.MessageID, &e.MailFrom, &e.RcptTo, &e.Subject, &e.MailDate,
-		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept,
+		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept, &openedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-	e.RawEmail = raw
-	e.CreatedAt, _ = time.Parse(time.RFC3339, created)
-	e.Kept = kept != 0
+	scanEmailFields(&e, raw, created, kept, openedAt)
 	return &e, nil
 }
 
@@ -284,15 +319,14 @@ func scanEmailRow(rows *sql.Rows) (*models.Email, error) {
 	var created string
 	var raw []byte
 	var kept int
+	var openedAt sql.NullString
 	err := rows.Scan(
 		&e.ID, &e.MessageID, &e.MailFrom, &e.RcptTo, &e.Subject, &e.MailDate,
-		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept,
+		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept, &openedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-	e.RawEmail = raw
-	e.CreatedAt, _ = time.Parse(time.RFC3339, created)
-	e.Kept = kept != 0
+	scanEmailFields(&e, raw, created, kept, openedAt)
 	return &e, nil
 }

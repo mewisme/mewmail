@@ -49,6 +49,7 @@ func New(d Deps) http.Handler {
 	r.Get("/health", healthHandler)
 	r.Get("/swagger", swaggerUIHandler)
 	r.Get("/swagger/", swaggerUIHandler)
+	r.Get("/swagger/init.js", swaggerInitHandler)
 	r.Get("/swagger/openapi.yaml", openAPIHandler)
 
 	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
@@ -73,7 +74,7 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 
 func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net")
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -84,13 +85,17 @@ func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 <div id="swagger-ui"></div>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-<script>
-window.onload = function() {
+<script src="/swagger/init.js"></script>
+</body></html>`))
+}
+
+func swaggerInitHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	_, _ = w.Write([]byte(`window.onload = function() {
   if (!window.SwaggerUIBundle) {
     document.body.innerHTML = "SwaggerUIBundle not loaded";
     return;
   }
-	
   SwaggerUIBundle({
     url: window.location.origin + "/swagger/openapi.yaml",
     dom_id: "#swagger-ui",
@@ -98,9 +103,7 @@ window.onload = function() {
     presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
     layout: "StandaloneLayout"
   });
-};
-</script>
-</body></html>`))
+};`))
 }
 
 func openAPIHandler(w http.ResponseWriter, _ *http.Request) {

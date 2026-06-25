@@ -86,8 +86,13 @@ func swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
 <script>
 window.onload = function() {
+  if (!window.SwaggerUIBundle) {
+    document.body.innerHTML = "SwaggerUIBundle not loaded";
+    return;
+  }
+	
   SwaggerUIBundle({
-    url: "/swagger/openapi.yaml",
+    url: window.location.origin + "/swagger/openapi.yaml",
     dom_id: "#swagger-ui",
     deepLinking: true,
     presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
@@ -134,14 +139,25 @@ func (h *emailHandlers) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *emailHandlers) latest(w http.ResponseWriter, r *http.Request) {
-	limit := 10
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			httputil.WriteError(w, http.StatusBadRequest, "invalid limit")
+	limitParam := r.URL.Query().Get("limit")
+	if limitParam == "" {
+		emails, _, err := h.db.ListEmails(r.Context(), database.EmailFilter{Limit: 1})
+		if err != nil {
+			h.log.Error("get latest email failed", "error", err)
+			httputil.WriteError(w, http.StatusInternalServerError, "failed to get latest email")
 			return
 		}
-		limit = n
+		if len(emails) == 0 {
+			httputil.WriteError(w, http.StatusNotFound, "no emails")
+			return
+		}
+		httputil.WriteSuccess(w, http.StatusOK, emails[0])
+		return
+	}
+	limit, err := strconv.Atoi(limitParam)
+	if err != nil || limit < 1 {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid limit")
+		return
 	}
 	emails, total, err := h.db.ListEmails(r.Context(), database.EmailFilter{Limit: limit})
 	if err != nil {

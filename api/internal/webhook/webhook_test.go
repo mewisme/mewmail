@@ -42,10 +42,10 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 		t.Fatalf("unexpected payload: %+v", payload)
 	}
 	embed := payload.Embeds[0]
-	if embed.Title != "hello" {
+	if embed.Title != "New email" {
 		t.Fatalf("title %q", embed.Title)
 	}
-	if embed.Description != "**a@x.com** → **b@x.com**" {
+	if embed.Description != "**hello**\n\n**a@x.com** → **b@x.com**" {
 		t.Fatalf("description %q", embed.Description)
 	}
 	if embed.Footer == nil || embed.Footer.Text != "MewMail · New email" {
@@ -137,10 +137,10 @@ func TestEmailOpened_DiscordPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	embed := payload.Embeds[0]
-	if embed.Title != "hi" {
+	if embed.Title != "Email opened" {
 		t.Fatalf("title %q", embed.Title)
 	}
-	if embed.Description != "First opened via **Preview link**" {
+	if embed.Description != "**hi**\n\nFirst opened via **Preview link**" {
 		t.Fatalf("description %q", embed.Description)
 	}
 }

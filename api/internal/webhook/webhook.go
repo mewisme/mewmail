@@ -139,8 +139,10 @@ func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, prev
 		fields = append(fields, discordField{Name: "Actions", Value: actions, Inline: false})
 	}
 	return discordEmbed{
-		Title:       displaySubject(subject),
-		Description: fmt.Sprintf("**%s** → **%s**", from, to),
+		Title: "New email",
+		Description: embedBody(subject,
+			fmt.Sprintf("**%s** → **%s**", from, to),
+		),
 		Color:       0x57F287,
 		Timestamp:   at.Format(time.RFC3339),
 		Footer:      newDiscordFooter("New email"),
@@ -150,11 +152,13 @@ func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, prev
 
 func (c *Client) emailOpenedEmbed(id int64, from, to, subject, via string, at time.Time) discordEmbed {
 	return discordEmbed{
-		Title:       displaySubject(subject),
-		Description: fmt.Sprintf("First opened via **%s**", formatVia(via)),
-		Color:       0x5865F2,
-		Timestamp:   at.Format(time.RFC3339),
-		Footer:      newDiscordFooter("Email opened"),
+		Title: "Email opened",
+		Description: embedBody(subject,
+			fmt.Sprintf("First opened via **%s**", formatVia(via)),
+		),
+		Color:     0x5865F2,
+		Timestamp: at.Format(time.RFC3339),
+		Footer:    newDiscordFooter("Email opened"),
 		Fields: []discordField{
 			{Name: "From", Value: from, Inline: true},
 			{Name: "To", Value: to, Inline: true},
@@ -276,6 +280,11 @@ func displaySubject(subject string) string {
 		return truncate(s, 256)
 	}
 	return "(no subject)"
+}
+
+func embedBody(subject string, lines ...string) string {
+	parts := append([]string{"**" + displaySubject(subject) + "**"}, lines...)
+	return strings.Join(parts, "\n\n")
 }
 
 func formatVia(via string) string {

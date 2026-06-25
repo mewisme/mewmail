@@ -1,4 +1,5 @@
 # MewMailAPI Postfix — receive-only catch-all
+# myhostname and virtual_alias_domains are set at container start (entrypoint.sh).
 
 smtpd_banner = $myhostname ESMTP
 biff = no
@@ -9,7 +10,6 @@ compatibility_level = 3.6
 # Receive only — never relay
 inet_interfaces = all
 inet_protocols = all
-myhostname = mail.example.com
 mydestination =
 relayhost =
 relay_domains =
@@ -18,8 +18,7 @@ smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination
 smtpd_recipient_restrictions = reject_unauth_destination, permit
 smtpd_helo_restrictions = permit_mynetworks, reject_invalid_helo_hostname, permit
 
-# Catch-all virtual domain (DOMAIN substituted at container start)
-virtual_alias_domains = example.com
+# Catch-all virtual domain (DOMAIN set at container start)
 virtual_alias_maps = hash:/etc/postfix/virtual
 transport_maps = hash:/etc/postfix/transport
 

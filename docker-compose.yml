@@ -17,6 +17,8 @@ services:
     image: ghcr.io/mewisme/mewmail/postfix:latest
     container_name: mewmail-postfix
     env_file: .env
+    environment:
+      DOMAIN: ${DOMAIN}
     volumes:
       - ./data:/data:ro
     ports:

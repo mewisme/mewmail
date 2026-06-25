@@ -1,5 +1,4 @@
-# MewMailAPI Postfix — receive-only catch-all
-# myhostname and virtual_alias_domains are set at container start (entrypoint.sh).
+# MewMailAPI Postfix — receive-only catch-all (rendered at container start)
 
 smtpd_banner = $myhostname ESMTP
 biff = no
@@ -7,25 +6,31 @@ append_dot_mydomain = no
 readme_directory = no
 compatibility_level = 3.6
 
-# Receive only — never relay
 inet_interfaces = all
 inet_protocols = all
+
+myhostname = __MAILHOST__
 mydestination =
 relayhost =
 relay_domains =
 mynetworks = 127.0.0.0/8 [::1]/128
+
+# Receive only — never relay
 smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination
 smtpd_recipient_restrictions = reject_unauth_destination, permit
 smtpd_helo_restrictions = permit_mynetworks, reject_invalid_helo_hostname, permit
 
-# Catch-all virtual domain (DOMAIN set at container start)
-virtual_alias_maps = hash:/etc/postfix/virtual
-transport_maps = hash:/etc/postfix/transport
+# Catch-all *@DOMAIN → pipe (no UNIX users, no Maildir, no alias rewriting)
+virtual_mailbox_domains = __DOMAIN__
+virtual_mailbox_maps = lmdb:/etc/postfix/virtual_mailbox
+virtual_transport = mewmail:
+
+local_transport = error:local delivery disabled
+default_transport = error:outbound delivery disabled
 
 message_size_limit = 10485760
 mailbox_size_limit = 0
 recipient_delimiter = +
 
-# Minimal memory
 default_process_limit = 20
 smtpd_client_connection_count_limit = 10

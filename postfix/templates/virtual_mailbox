@@ -1,0 +1,2 @@
+# Catch-all: every *@DOMAIN matches; path is unused (virtual_transport = mewmail:)
+@__DOMAIN__    __DOMAIN__/inbox/

@@ -48,7 +48,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cl := cleaner.New(db, log, cfg.EmailRetentionDays, wh)
+	cl := cleaner.New(db, log, cfg.EmailRetentionHours, wh)
 	go cl.Run(ctx)
 
 	addr := fmt.Sprintf("%s:%s", cfg.APIHost, cfg.Port)

@@ -12,10 +12,9 @@ import (
 
 // IngestHandler handles POST /internal/ingest from Postfix.
 type IngestHandler struct {
-	DB             *database.DB
-	Log            *slog.Logger
-	AllowMultipart bool
-	Webhook        *webhook.Client
+	DB      *database.DB
+	Log     *slog.Logger
+	Webhook *webhook.Client
 }
 
 // ServeHTTP ingests a raw RFC822 message.
@@ -42,9 +41,14 @@ func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email, err := ParseRaw(raw, rcptTo, h.AllowMultipart)
+	email, err := ParseRaw(raw, rcptTo)
 	if err != nil {
-		h.Log.Error("parse email failed", "error", err, "request_id", r.Header.Get("X-Request-Id"))
+		h.Log.Error("parse email failed",
+			"error", err,
+			"rcpt", rcptTo,
+			"bytes", len(raw),
+			"request_id", r.Header.Get("X-Request-Id"),
+		)
 		httputil.WriteError(w, http.StatusBadRequest, "failed to parse email")
 		return
 	}
@@ -72,6 +76,6 @@ func (h *IngestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewIngestHandler returns the ingest HTTP handler.
-func NewIngestHandler(db *database.DB, log *slog.Logger, allowMultipart bool, wh *webhook.Client) http.Handler {
-	return &IngestHandler{DB: db, Log: log, AllowMultipart: allowMultipart, Webhook: wh}
+func NewIngestHandler(db *database.DB, log *slog.Logger, wh *webhook.Client) http.Handler {
+	return &IngestHandler{DB: db, Log: log, Webhook: wh}
 }

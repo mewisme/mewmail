@@ -27,7 +27,7 @@ func TestCleaner_DeletesExpired(t *testing.T) {
 		Subject:     "old",
 		HeadersJSON: "{}",
 		RawEmail:    []byte("raw"),
-		CreatedAt:   time.Now().UTC().AddDate(0, 0, -10),
+		CreatedAt:   time.Now().UTC().Add(-250 * time.Hour),
 		Attachments: []models.Attachment{{Filename: "f.txt", ContentType: "text/plain", Size: 1}},
 	}
 	newer := &models.Email{
@@ -47,7 +47,7 @@ func TestCleaner_DeletesExpired(t *testing.T) {
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	cl := cleaner.New(db, log, 7, nil)
+	cl := cleaner.New(db, log, 168, nil)
 	n, err := cl.CleanOnce(context.Background())
 	if err != nil {
 		t.Fatal(err)

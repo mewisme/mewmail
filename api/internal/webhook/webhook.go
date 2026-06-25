@@ -64,20 +64,20 @@ func (c *Client) EmailReceived(id int64, from, to, subject, messageID string) {
 }
 
 // EmailsCleaned notifies that expired emails were deleted.
-func (c *Client) EmailsCleaned(count int64, cutoff time.Time, retentionDays int) {
+func (c *Client) EmailsCleaned(count int64, cutoff time.Time, retentionHours int) {
 	if !c.Enabled() || count == 0 {
 		return
 	}
 	now := time.Now().UTC()
 	data := map[string]any{
-		"count":          count,
-		"cutoff":         cutoff.Format(time.RFC3339),
-		"retention_days": retentionDays,
+		"count":           count,
+		"cutoff":          cutoff.Format(time.RFC3339),
+		"retention_hours": retentionHours,
 	}
 	go c.send("email.cleaned", "Emails cleaned", 0xFEE75C, now, []field{
 		{"Deleted", fmt.Sprintf("%d", count), true},
 		{"Older than", cutoff.Format(time.RFC3339), true},
-		{"Retention", fmt.Sprintf("%d days", retentionDays), true},
+		{"Retention", fmt.Sprintf("%d hours", retentionHours), true},
 	}, data)
 }
 

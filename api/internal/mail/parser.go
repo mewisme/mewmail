@@ -15,20 +15,13 @@ import (
 )
 
 // ParseRaw parses RFC822 bytes into an Email model.
-// When allowMultipart is false, messages with a multipart/* Content-Type are rejected.
-func ParseRaw(raw []byte, rcptTo string, allowMultipart bool) (*models.Email, error) {
+func ParseRaw(raw []byte, rcptTo string) (*models.Email, error) {
 	mr, err := gomail.CreateReader(strings.NewReader(string(raw)))
 	if err != nil {
 		return nil, fmt.Errorf("create reader: %w", err)
 	}
 
 	hdr := mr.Header
-	if !allowMultipart {
-		ct, _, _ := hdr.ContentType()
-		if strings.HasPrefix(ct, "multipart/") {
-			return nil, fmt.Errorf("multipart not allowed")
-		}
-	}
 	headers := headerMap(hdr)
 
 	msgID, _ := hdr.MessageID()

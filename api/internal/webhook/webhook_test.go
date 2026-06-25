@@ -58,7 +58,7 @@ func TestEmailsCleaned_GenericPayload(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	c := New(srv.URL, log)
 	cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.EmailsCleaned(3, cutoff, 7)
+	c.EmailsCleaned(3, cutoff, 168)
 
 	deadline := time.Now().Add(2 * time.Second)
 	for got.Load() == nil && time.Now().Before(deadline) {

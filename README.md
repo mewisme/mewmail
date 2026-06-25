@@ -133,8 +133,7 @@ OpenAPI 3 spec and UI (internal network):
 |----------|---------|-------------|
 | `DOMAIN` | — | Mail domain for Postfix (catch-all) |
 | `PORT` | `8080` | API listen port (host + container). Changing this requires `docker compose up -d --force-recreate` so Postfix picks up the new port (written to `/var/spool/postfix/.ingest-port` at startup). |
-| `EMAIL_RETENTION_DAYS` | `7` | Auto-delete after N days |
-| `ALLOW_MULTIPART` | `false` | Accept multipart MIME messages |
+| `EMAIL_RETENTION_HOURS` | `168` | Auto-delete after N hours (default 7 days) |
 | `WEBHOOK_URL` | — | Optional HTTP webhook for events (Discord-compatible) |
 
 `API_HOST`, `DB_PATH` — optional overrides for the API (defaults: `0.0.0.0`, `/data/mail.db`). Not needed for Docker deploys.
@@ -166,7 +165,7 @@ echo "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin
 docker compose pull
 ```
 
-A background cleaner runs hourly and deletes emails older than `EMAIL_RETENTION_DAYS`. Attachment metadata is removed via foreign-key cascade. `VACUUM` runs approximately daily.
+A background cleaner runs hourly and deletes emails older than `EMAIL_RETENTION_HOURS`. Attachment metadata is removed via foreign-key cascade. `VACUUM` runs approximately daily.
 
 ## Database backup
 

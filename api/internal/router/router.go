@@ -50,7 +50,7 @@ func New(d Deps) http.Handler {
 	r.Get("/swagger", swaggerUIHandler)
 	r.Get("/swagger/openapi.yaml", openAPIHandler)
 
-	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Config.AllowMultipart, d.Webhook)
+	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
 	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
 
 	r.Route("/emails", func(r chi.Router) {

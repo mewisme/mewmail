@@ -47,15 +47,17 @@ const qpEmail = "From: qp@example.com\r\n" +
 	"\r\n" +
 	"Hello=20World=21\r\n"
 
-func TestParseRaw_MultipartRejected(t *testing.T) {
-	_, err := mail.ParseRaw([]byte(multipartEmail), "recv@example.com", false)
+func TestParseRaw_MboxFromLineRejected(t *testing.T) {
+	// Postfix pipe flags=F prepends mbox "From " — must not use F in master.cf
+	mbox := "From sender@example.com Thu Jun 25 17:00:00 2025\r\n" + plainEmail
+	_, err := mail.ParseRaw([]byte(mbox), "recv@example.com")
 	if err == nil {
-		t.Fatal("expected error when multipart disabled")
+		t.Fatal("expected error for mbox-prefixed message")
 	}
 }
 
 func TestParseRaw_Plain(t *testing.T) {
-	e, err := mail.ParseRaw([]byte(plainEmail), "recv@example.com", false)
+	e, err := mail.ParseRaw([]byte(plainEmail), "recv@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +79,7 @@ func TestParseRaw_Plain(t *testing.T) {
 }
 
 func TestParseRaw_Multipart(t *testing.T) {
-	e, err := mail.ParseRaw([]byte(multipartEmail), "recv@example.com", true)
+	e, err := mail.ParseRaw([]byte(multipartEmail), "recv@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +101,7 @@ func TestParseRaw_Multipart(t *testing.T) {
 }
 
 func TestParseRaw_QuotedPrintable(t *testing.T) {
-	e, err := mail.ParseRaw([]byte(qpEmail), "recv@example.com", false)
+	e, err := mail.ParseRaw([]byte(qpEmail), "recv@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}

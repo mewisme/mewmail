@@ -26,6 +26,6 @@ lmtp      unix  -       -       y       -       -       lmtp
 anvil     unix  -       -       y       -       1       anvil
 scache    unix  -       -       y       -       1       scache
 
-# Pipe incoming mail to Go API
+# Pipe incoming mail to Go API (no F flag — F prepends mbox "From " and breaks RFC822 parse)
 mewmail   unix  -       n       n       -       -       pipe
-  flags=FR user=nobody argv=/usr/local/bin/ingest-mail ${recipient}
+  flags=R user=nobody argv=/usr/local/bin/ingest-mail ${recipient}

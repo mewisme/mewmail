@@ -38,7 +38,10 @@ CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);
 	if _, err := conn.Exec(schema); err != nil {
 		return err
 	}
-	return addColumnIfMissing(conn, "emails", "preview_otk", "TEXT")
+	if err := addColumnIfMissing(conn, "emails", "preview_otk", "TEXT"); err != nil {
+		return err
+	}
+	return addColumnIfMissing(conn, "emails", "kept", "INTEGER NOT NULL DEFAULT 0")
 }
 
 func addColumnIfMissing(conn *sql.DB, table, column, typ string) error {

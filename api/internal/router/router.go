@@ -59,6 +59,7 @@ func New(d Deps) http.Handler {
 
 	h := &emailHandlers{db: d.DB, log: d.Log, apiKey: d.APIKey}
 	r.Get("/emails/preview/{id}", h.preview)
+	r.Get("/emails/{id}/keep", h.keep)
 
 	r.Route("/emails", func(r chi.Router) {
 		r.Use(auth.BearerAuth(d.APIKey, d.Log))
@@ -142,24 +143,7 @@ func (h *emailHandlers) preview(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	q := r.URL.Query()
-	switch {
-	case auth.ValidAPIKey(q.Get("apikey"), h.apiKey):
-	case q.Get("otk") != "":
-		ok, err := h.db.ConsumePreviewOTK(r.Context(), id, q.Get("otk"))
-		if err != nil {
-			h.log.Error("preview otk failed", "error", err)
-			httputil.WriteError(w, http.StatusInternalServerError, "failed to authorize preview")
-			return
-		}
-		if !ok {
-			h.log.Warn("preview auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
-			httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-	default:
-		h.log.Warn("preview auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
-		httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+	if !h.authorizeEmailLink(w, r, id, true) {
 		return
 	}
 
@@ -195,6 +179,71 @@ func (h *emailHandlers) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteSuccess(w, http.StatusOK, email)
+}
+
+func (h *emailHandlers) keep(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if !h.authorizeEmailLink(w, r, id, false) {
+		return
+	}
+	status, ok, err := h.db.KeepEmail(r.Context(), id)
+	if err != nil {
+		h.log.Error("keep email failed", "error", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to keep email")
+		return
+	}
+	if !ok {
+		httputil.WriteError(w, http.StatusNotFound, "email not found")
+		return
+	}
+	email, err := h.db.GetEmail(r.Context(), id)
+	if err != nil {
+		h.log.Error("get email after keep failed", "error", err)
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to get email")
+		return
+	}
+	if status == "kept" {
+		h.log.Info("email kept", "id", id)
+	}
+	httputil.WriteSuccess(w, http.StatusOK, map[string]any{
+		"status": status,
+		"email":  email,
+	})
+}
+
+func (h *emailHandlers) authorizeEmailLink(w http.ResponseWriter, r *http.Request, id int64, consumeOTK bool) bool {
+	q := r.URL.Query()
+	switch {
+	case auth.ValidAPIKey(q.Get("apikey"), h.apiKey):
+		return true
+	case q.Get("otk") != "":
+		var ok bool
+		var err error
+		if consumeOTK {
+			ok, err = h.db.ConsumePreviewOTK(r.Context(), id, q.Get("otk"))
+		} else {
+			ok, err = h.db.ValidPreviewOTK(r.Context(), id, q.Get("otk"))
+		}
+		if err != nil {
+			h.log.Error("email link auth failed", "error", err, "consume_otk", consumeOTK)
+			httputil.WriteError(w, http.StatusInternalServerError, "failed to authorize")
+			return false
+		}
+		if !ok {
+			h.log.Warn("email link auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
+			httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+			return false
+		}
+		return true
+	default:
+		h.log.Warn("email link auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
+		httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return false
+	}
 }
 
 func (h *emailHandlers) deleteOne(w http.ResponseWriter, r *http.Request) {

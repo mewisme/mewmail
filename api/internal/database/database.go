@@ -19,6 +19,8 @@ type DB struct {
 	countEmails    *sql.Stmt
 	deleteEmail    *sql.Stmt
 	deleteExpired  *sql.Stmt
+	keepEmail      *sql.Stmt
+	checkOTK       *sql.Stmt
 	consumeOTK     *sql.Stmt
 	listAttach     *sql.Stmt
 	deleteFiltered *sql.Stmt
@@ -69,10 +71,12 @@ func (db *DB) prepare() error {
 		{&db.insertEmail, `INSERT INTO emails (message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at, preview_otk)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`},
 		{&db.insertAttach, `INSERT INTO attachments (email_id, filename, content_type, size) VALUES (?, ?, ?, ?)`},
-		{&db.getEmail, `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at FROM emails WHERE id = ?`},
+		{&db.getEmail, `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at, kept FROM emails WHERE id = ?`},
 		{&db.listAttach, `SELECT id, email_id, filename, content_type, size FROM attachments WHERE email_id = ?`},
 		{&db.deleteEmail, `DELETE FROM emails WHERE id = ?`},
-		{&db.deleteExpired, `DELETE FROM emails WHERE created_at < ?`},
+		{&db.deleteExpired, `DELETE FROM emails WHERE created_at < ? AND kept = 0`},
+		{&db.keepEmail, `UPDATE emails SET kept = 1 WHERE id = ? AND kept = 0`},
+		{&db.checkOTK, `SELECT 1 FROM emails WHERE id = ? AND preview_otk = ? LIMIT 1`},
 		{&db.consumeOTK, `UPDATE emails SET preview_otk = NULL WHERE id = ? AND preview_otk = ?`},
 	}
 
@@ -89,7 +93,7 @@ func (db *DB) prepare() error {
 func (db *DB) Close() error {
 	for _, s := range []*sql.Stmt{
 		db.insertEmail, db.insertAttach, db.getEmail, db.listAttach,
-		db.deleteEmail, db.deleteExpired, db.consumeOTK,
+		db.deleteEmail, db.deleteExpired, db.keepEmail, db.checkOTK, db.consumeOTK,
 		db.listEmails, db.countEmails, db.deleteFiltered, db.countFiltered,
 	} {
 		if s != nil {

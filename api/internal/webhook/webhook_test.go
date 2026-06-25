@@ -22,8 +22,8 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	defer srv.Close()
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	c := New(srv.URL+"/api/webhooks/1/token", "", log)
-	c.EmailReceived(42, "a@x.com", "b@x.com", "hello", "<id@x.com>", "otk-secret")
+	c := New(srv.URL+"/api/webhooks/1/token", "https://mail.example.com", log)
+	c.EmailReceived(7, "a@x.com", "b@x.com", "hello", "<id@x.com>", "one-time-token")
 
 	deadline := time.Now().Add(2 * time.Second)
 	for got.Load() == nil && time.Now().Before(deadline) {
@@ -43,6 +43,21 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	}
 	if payload.Embeds[0].Title != "Email received" {
 		t.Fatalf("title %q", payload.Embeds[0].Title)
+	}
+	var preview, keep string
+	for _, f := range payload.Embeds[0].Fields {
+		switch f.Name {
+		case "Preview":
+			preview = f.Value
+		case "Keep":
+			keep = f.Value
+		}
+	}
+	if preview != "[Preview](https://mail.example.com/emails/preview/7?otk=one-time-token)" {
+		t.Fatalf("preview field %q", preview)
+	}
+	if keep != "[Keep](https://mail.example.com/emails/7/keep?otk=one-time-token)" {
+		t.Fatalf("keep field %q", keep)
 	}
 }
 
@@ -119,8 +134,12 @@ func TestEmailReceived_PreviewURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := payload["data"].(map[string]any)
-	want := "https://mail.example.com/emails/preview/7?otk=one-time-token"
-	if data["preview_url"] != want {
-		t.Fatalf("preview_url %v, want %q", data["preview_url"], want)
+	wantPreview := "https://mail.example.com/emails/preview/7?otk=one-time-token"
+	if data["preview_url"] != wantPreview {
+		t.Fatalf("preview_url %v, want %q", data["preview_url"], wantPreview)
+	}
+	wantKeep := "https://mail.example.com/emails/7/keep?otk=one-time-token"
+	if data["keep_url"] != wantKeep {
+		t.Fatalf("keep_url %v, want %q", data["keep_url"], wantKeep)
 	}
 }

@@ -15,6 +15,7 @@ type Email struct {
 	HeadersJSON string       `json:"headers_json"`
 	RawEmail    []byte       `json:"raw_email,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
+	Kept        bool         `json:"kept"`
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 

@@ -62,6 +62,22 @@ func (db *DB) InsertEmail(ctx context.Context, e *models.Email) (int64, string, 
 	return id, previewOTK, nil
 }
 
+// ValidPreviewOTK checks a preview token without clearing it.
+func (db *DB) ValidPreviewOTK(ctx context.Context, id int64, otk string) (bool, error) {
+	if otk == "" {
+		return false, nil
+	}
+	var one int
+	err := db.checkOTK.QueryRowContext(ctx, id, otk).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ConsumePreviewOTK validates a one-time preview token and clears it.
 func (db *DB) ConsumePreviewOTK(ctx context.Context, id int64, otk string) (bool, error) {
 	if otk == "" {
@@ -111,7 +127,7 @@ func (db *DB) ListEmails(ctx context.Context, f EmailFilter) ([]models.Email, in
 		return nil, 0, err
 	}
 
-	listQ := `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at
+	listQ := `SELECT id, message_id, mail_from, rcpt_to, subject, mail_date, text_body, html_body, headers_json, raw_email, created_at, kept
 		FROM emails` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	listArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := db.conn.QueryContext(ctx, listQ, listArgs...)
@@ -147,6 +163,31 @@ func (db *DB) ListEmails(ctx context.Context, f EmailFilter) ([]models.Email, in
 		emails = []models.Email{}
 	}
 	return emails, total, nil
+}
+
+// KeepEmail marks an email to survive automatic retention cleanup.
+// Status is "kept" on first call or "already_kept" when unchanged. ok is false if missing.
+func (db *DB) KeepEmail(ctx context.Context, id int64) (status string, ok bool, err error) {
+	res, err := db.keepEmail.ExecContext(ctx, id)
+	if err != nil {
+		return "", false, err
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		return "kept", true, nil
+	}
+	var kept int
+	err = db.conn.QueryRowContext(ctx, `SELECT kept FROM emails WHERE id = ?`, id).Scan(&kept)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if kept != 0 {
+		return "already_kept", true, nil
+	}
+	return "", false, nil
 }
 
 // DeleteEmail removes one email by ID.
@@ -224,15 +265,17 @@ func scanEmailRowFromRow(row *sql.Row) (*models.Email, error) {
 	var e models.Email
 	var created string
 	var raw []byte
+	var kept int
 	err := row.Scan(
 		&e.ID, &e.MessageID, &e.MailFrom, &e.RcptTo, &e.Subject, &e.MailDate,
-		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created,
+		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept,
 	)
 	if err != nil {
 		return nil, err
 	}
 	e.RawEmail = raw
 	e.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	e.Kept = kept != 0
 	return &e, nil
 }
 
@@ -240,14 +283,16 @@ func scanEmailRow(rows *sql.Rows) (*models.Email, error) {
 	var e models.Email
 	var created string
 	var raw []byte
+	var kept int
 	err := rows.Scan(
 		&e.ID, &e.MessageID, &e.MailFrom, &e.RcptTo, &e.Subject, &e.MailDate,
-		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created,
+		&e.TextBody, &e.HTMLBody, &e.HeadersJSON, &raw, &created, &kept,
 	)
 	if err != nil {
 		return nil, err
 	}
 	e.RawEmail = raw
 	e.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	e.Kept = kept != 0
 	return &e, nil
 }

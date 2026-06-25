@@ -65,7 +65,11 @@ func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOT
 	}
 	if previewURL := c.previewURL(id, previewOTK); previewURL != "" {
 		data["preview_url"] = previewURL
-		fields = append(fields, field{"Preview", previewURL, false})
+		fields = append(fields, field{"Preview", discordLink("Preview", previewURL), false})
+	}
+	if keepURL := c.keepURL(id, previewOTK); keepURL != "" {
+		data["keep_url"] = keepURL
+		fields = append(fields, field{"Keep", discordLink("Keep", keepURL), false})
 	}
 	go c.send("email.received", "Email received", 0x57F287, now, fields, data)
 }
@@ -75,6 +79,13 @@ func (c *Client) previewURL(id int64, otk string) string {
 		return ""
 	}
 	return fmt.Sprintf("%s/emails/preview/%d?otk=%s", c.publicURL, id, otk)
+}
+
+func (c *Client) keepURL(id int64, otk string) string {
+	if c.publicURL == "" || otk == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/emails/%d/keep?otk=%s", c.publicURL, id, otk)
 }
 
 // EmailsCleaned notifies that expired emails were deleted.
@@ -176,6 +187,10 @@ func buildDiscordPayload(title string, color int, at time.Time, fields []field) 
 			Fields:    embedFields,
 		}},
 	}
+}
+
+func discordLink(label, url string) string {
+	return fmt.Sprintf("[%s](%s)", label, url)
 }
 
 func truncate(s string, max int) string {

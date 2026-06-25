@@ -109,6 +109,48 @@ paths:
           description: Deleted
         "404":
           description: Not found
+  /emails/{id}/keep:
+    get:
+      summary: Keep email from auto-cleanup
+      description: Marks an email to survive retention-based deletion. Use `apikey` or `otk` from webhook; `otk` is not consumed here (only preview clears it). Explicit DELETE still removes the email.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: apikey
+          in: query
+          schema:
+            type: string
+        - name: otk
+          in: query
+          description: Preview token from webhook (reusable until preview is opened)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Email marked as kept
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [kept, already_kept]
+                          email:
+                            $ref: "#/components/schemas/Email"
+        "401":
+          description: Invalid or missing credentials
+        "404":
+          description: Not found
   /emails/preview/{id}:
     get:
       summary: Preview email in browser
@@ -227,6 +269,9 @@ components:
         created_at:
           type: string
           format: date-time
+        kept:
+          type: boolean
+          description: When true, the email is excluded from automatic retention cleanup.
         attachments:
           type: array
           items:

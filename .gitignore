@@ -1,0 +1,4 @@
+data/mail.db
+data/.credentials
+.env
+*.exe

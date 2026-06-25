@@ -1,0 +1,29 @@
+services:
+  api:
+    build: ./api
+    image: ghcr.io/mewisme/mewmail/api:latest
+    env_file: .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    networks:
+      - mewmail
+    restart: unless-stopped
+
+  postfix:
+    build: ./postfix
+    image: ghcr.io/mewisme/mewmail/postfix:latest
+    env_file: .env
+    volumes:
+      - ./data:/data:ro
+    ports:
+      - "25:25"
+    depends_on:
+      - api
+    networks:
+      - mewmail
+    restart: unless-stopped
+
+networks:
+  mewmail:

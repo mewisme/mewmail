@@ -1,0 +1,57 @@
+---
+description: CodeGraph MCP usage guide — when to use which tool
+alwaysApply: true
+---
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file. Reads are sub-millisecond and return structural information grep cannot.
+
+### When to prefer codegraph over native search
+
+Use codegraph for **structural** questions — what calls what, what would break, where is X defined, what is X's signature. Use native grep/read only for **literal text** queries (string contents, comments, log messages) or after you already have a specific file open.
+
+### Tool selection and input parameters
+
+Always pass arguments using the exact field names below. If a required field is missing, the call is invalid.
+
+| Question | Tool | Required input | Optional input |
+|---|---|---|---|
+| "Where is X defined?" / "Find symbol named X" | `codegraph_search` | `query: string` | `kind: "function" \| "method" \| "class" \| "interface" \| "type" \| "variable" \| "route" \| "component"`, `limit: number = 10`, `projectPath: string` |
+| "What calls function Y?" | `codegraph_callers` | `symbol: string` | `limit: number = 20`, `projectPath: string` |
+| "What does Y call?" | `codegraph_callees` | `symbol: string` | `limit: number = 20`, `projectPath: string` |
+| "What would break if I changed Z?" | `codegraph_impact` | `symbol: string` | `depth: number = 2`, `projectPath: string` |
+| "Show me Y's signature / source / docstring" | `codegraph_node` | `symbol: string` | `includeCode: boolean = false`, `projectPath: string` |
+| "Give me focused context for a task/area" | `codegraph_context` | `task: string` | `maxNodes: number = 20`, `includeCode: boolean = true`, `projectPath: string` |
+| "See several related symbols' source at once" | `codegraph_explore` | `query: string` | `maxFiles: number = 12`, `projectPath: string` |
+| "What files exist under path/" | `codegraph_files` | none | `path: string`, `pattern: string`, `format: "tree" \| "flat" \| "grouped" = "tree"`, `includeMetadata: boolean = true`, `maxDepth: number`, `projectPath: string` |
+| "Is the index healthy?" | `codegraph_status` | none | `projectPath: string` |
+| "How does A reach B in call flow?" | `codegraph_trace` | `from: string`, `to: string` | `projectPath: string` |
+
+### Minimal valid call examples
+
+- `codegraph_search({ query: "AuthService" })`
+- `codegraph_context({ task: "how auth redirects work after sign-in" })`
+- `codegraph_callers({ symbol: "loginUser" })`
+- `codegraph_callees({ symbol: "handleRequest" })`
+- `codegraph_impact({ symbol: "UserService" })`
+- `codegraph_node({ symbol: "renderPage" })`
+- `codegraph_explore({ query: "AuthService loginUser session-manager" })`
+- `codegraph_status({})`
+- `codegraph_files({ path: "src/components", format: "tree" })`
+- `codegraph_trace({ from: "handleSubmit", to: "execute_sql" })`
+
+### Rules of thumb
+
+- **Answer directly — don't delegate exploration.** For "how does X work" / architecture / trace questions, answer with 2-3 codegraph calls: `codegraph_context` first, then ONE `codegraph_explore` for the source of the symbols it surfaces. Codegraph IS the pre-built index, so spawning a separate file-reading sub-task/agent — or running a grep + read loop — repeats work codegraph already did and costs more for the same answer.
+- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify them with grep — that's slower, less accurate, and wastes context.
+- **Don't grep first** when looking up a symbol by name. `codegraph_search` is faster and returns kind + location + signature in one call.
+- **Don't chain `codegraph_search` + `codegraph_node`** when you just want context — `codegraph_context` is one call.
+- **Don't loop `codegraph_node` over many symbols** — one `codegraph_explore` call returns several symbols' source grouped in a single capped call, while each separate node/Read call re-reads the whole context and costs far more.
+- **Index lag**: the file watcher debounces ~500ms behind writes; don't re-query immediately after editing a file in the same turn.
+
+### If `.codegraph/` doesn't exist
+
+The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"*
+<!-- CODEGRAPH_END -->

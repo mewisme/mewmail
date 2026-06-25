@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+RCPT="${1:?recipient required}"
+
+CRED="${CREDENTIALS_PATH:-/data/.credentials}"
+if [ ! -f "$CRED" ]; then
+  echo "credentials file not found: $CRED" >&2
+  exit 1
+fi
+
+TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+if [ -z "$TOKEN" ]; then
+  echo "api_key not found in $CRED" >&2
+  exit 1
+fi
+
+PORT="${PORT:-8080}"
+curl -fsS -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: message/rfc822" \
+  -H "X-Envelope-To: ${RCPT}" \
+  --data-binary @- \
+  "http://api:${PORT}/internal/ingest"

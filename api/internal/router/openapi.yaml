@@ -1,0 +1,196 @@
+openapi: 3.0.3
+info:
+  title: MewMailAPI
+  description: Lightweight self-hosted email receiving REST API
+  version: 1.0.0
+servers:
+  - url: http://api:8080
+    description: Internal Docker network
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+  /emails:
+    get:
+      summary: List emails
+      parameters:
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/subject"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/after"
+        - $ref: "#/components/parameters/before"
+      responses:
+        "200":
+          description: Email list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          emails:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Email"
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
+                          offset:
+                            type: integer
+    delete:
+      summary: Delete emails matching filters
+      parameters:
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/subject"
+        - $ref: "#/components/parameters/after"
+        - $ref: "#/components/parameters/before"
+      responses:
+        "200":
+          description: Deleted count
+  /emails/{id}:
+    get:
+      summary: Get email by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Email
+        "404":
+          description: Not found
+    delete:
+      summary: Delete email by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          description: Not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    from:
+      name: from
+      in: query
+      schema:
+        type: string
+    to:
+      name: to
+      in: query
+      schema:
+        type: string
+    subject:
+      name: subject
+      in: query
+      schema:
+        type: string
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+    after:
+      name: after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    before:
+      name: before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+    Email:
+      type: object
+      properties:
+        id:
+          type: integer
+        message_id:
+          type: string
+        mail_from:
+          type: string
+        rcpt_to:
+          type: string
+        subject:
+          type: string
+        mail_date:
+          type: string
+        text_body:
+          type: string
+        html_body:
+          type: string
+        headers_json:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        content_type:
+          type: string
+        size:
+          type: integer

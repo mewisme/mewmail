@@ -2,6 +2,7 @@ services:
   api:
     build: ./api
     image: ghcr.io/mewisme/mewmail/api:latest
+    container_name: mewmail-api
     env_file: .env
     volumes:
       - ./data:/data
@@ -14,6 +15,7 @@ services:
   postfix:
     build: ./postfix
     image: ghcr.io/mewisme/mewmail/postfix:latest
+    container_name: mewmail-postfix
     env_file: .env
     volumes:
       - ./data:/data:ro

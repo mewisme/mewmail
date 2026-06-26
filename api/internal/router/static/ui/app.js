@@ -162,8 +162,13 @@
     setActiveRow(id);
     setStatus('Loading email…');
     try {
-      const email = await api('/emails/' + id + '?track_open=false');
+      const email = await api('/emails/' + id);
       selectedEmail = email;
+      const idx = emails.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        emails[idx] = { ...emails[idx], opened_at: email.opened_at, kept: email.kept };
+        renderList();
+      }
       detailEl.replaceChildren();
       detailEl.appendChild(renderDetailActions(email));
       const body = document.createElement('div');

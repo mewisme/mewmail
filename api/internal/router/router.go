@@ -29,11 +29,12 @@ var uiFS = openAPIFS
 
 // Deps holds router dependencies.
 type Deps struct {
-	Config  *config.Config
-	DB      *database.DB
-	Log     *slog.Logger
-	APIKey  string
-	Webhook *webhook.Client
+	Config         *config.Config
+	DB             *database.DB
+	Log            *slog.Logger
+	APIKey         string
+	InternalAPIKey string
+	Webhook        *webhook.Client
 }
 
 // New builds the HTTP router.
@@ -49,14 +50,6 @@ func New(d Deps) http.Handler {
 	r.Use(middleware.BodyLimit(d.Config.MaxBodyBytes))
 	r.Use(middleware.RateLimit(120, time.Minute))
 
-	r.Get("/health", healthHandler)
-	r.Get("/health/ready", readyHandler(d.DB))
-	mountSwagger(r)
-	mountUI(r)
-
-	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
-	r.With(auth.InternalBearerAuth(d.APIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
-
 	h := &emailHandlers{
 		db:             d.DB,
 		log:            d.Log,
@@ -65,23 +58,33 @@ func New(d Deps) http.Handler {
 		publicURL:      d.Config.PublicURL,
 		requestTimeout: timeout,
 	}
-	r.Get("/emails/preview/{id}", h.preview)
-	r.With(auth.BearerAuth(d.APIKey, d.Log)).Post("/emails/{id}/keep", h.keep)
-	r.Get("/emails/{id}/keep", h.keep) // ponytail: GET for webhook one-click links only
-	r.With(auth.BearerAuth(d.APIKey, d.Log)).Delete("/emails/{id}/keep", h.unkeep)
-	r.With(auth.BearerAuth(d.APIKey, d.Log)).Post("/emails/{id}/preview-token", h.previewToken)
-	r.With(auth.BearerAuth(d.APIKey, d.Log)).Get("/emails/{id}/raw", h.raw)
+	mountUI(r, h.preview)
 
-	r.Route("/emails", func(r chi.Router) {
-		r.Use(auth.BearerAuth(d.APIKey, d.Log))
-		r.Get("/", h.list)
-		r.Get("/wait", h.wait)
-		r.Get("/stats", h.stats)
-		r.Get("/latest", h.latest)
-		r.Head("/{id}", h.head)
-		r.Get("/{id}", h.get)
-		r.Delete("/", h.deleteMany)
-		r.Delete("/{id}", h.deleteOne)
+	ingest := mail.NewIngestHandler(d.DB, d.Log, d.Webhook)
+	r.Route("/api", func(api chi.Router) {
+		api.Get("/health", healthHandler)
+		api.Get("/health/ready", readyHandler(d.DB))
+		mountSwagger(api)
+
+		api.With(auth.InternalBearerAuth(d.InternalAPIKey, d.Log)).Post("/internal/ingest", ingest.ServeHTTP)
+
+		api.Get("/emails/{id}/keep", h.keep) // ponytail: GET for webhook one-click links only
+		api.With(auth.BearerAuth(d.APIKey, d.Log)).Post("/emails/{id}/keep", h.keep)
+		api.With(auth.BearerAuth(d.APIKey, d.Log)).Delete("/emails/{id}/keep", h.unkeep)
+		api.With(auth.BearerAuth(d.APIKey, d.Log)).Post("/emails/{id}/preview-token", h.previewToken)
+		api.With(auth.BearerAuth(d.APIKey, d.Log)).Get("/emails/{id}/raw", h.raw)
+
+		api.Route("/emails", func(r chi.Router) {
+			r.Use(auth.BearerAuth(d.APIKey, d.Log))
+			r.Get("/", h.list)
+			r.Get("/wait", h.wait)
+			r.Get("/stats", h.stats)
+			r.Get("/latest", h.latest)
+			r.Head("/{id}", h.head)
+			r.Get("/{id}", h.get)
+			r.Delete("/", h.deleteMany)
+			r.Delete("/{id}", h.deleteOne)
+		})
 	})
 
 	return r
@@ -420,9 +423,9 @@ func (h *emailHandlers) previewToken(w http.ResponseWriter, r *http.Request) {
 	}
 	data := map[string]any{"otk": previewOTK}
 	if h.publicURL != "" {
-		data["preview_url"] = fmt.Sprintf("%s/emails/preview/%d?otk=%s", h.publicURL, id, previewOTK)
+		data["preview_url"] = fmt.Sprintf("%s/preview/%d?otk=%s", h.publicURL, id, previewOTK)
 		if keepOTK != "" {
-			data["keep_url"] = fmt.Sprintf("%s/emails/%d/keep?otk=%s", h.publicURL, id, keepOTK)
+			data["keep_url"] = fmt.Sprintf("%s/api/emails/%d/keep?otk=%s", h.publicURL, id, keepOTK)
 		}
 	}
 	httputil.WriteSuccess(w, http.StatusOK, data)
@@ -454,7 +457,7 @@ func (h *emailHandlers) trackFirstOpen(w http.ResponseWriter, r *http.Request, i
 func (h *emailHandlers) authorizeEmailLink(w http.ResponseWriter, r *http.Request, id int64, purpose linkPurpose) bool {
 	q := r.URL.Query()
 	switch {
-	case auth.ValidAPIKey(q.Get("apikey"), h.apiKey):
+	case auth.ValidRequestAPIKey(r, h.apiKey):
 		return true
 	case q.Get("otk") != "":
 		var ok bool

@@ -64,7 +64,7 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	if id != "`#7`" {
 		t.Fatalf("id field %q", id)
 	}
-	wantActions := "[Open](https://mail.example.com/emails/preview/7?otk=preview-token) · [Keep](https://mail.example.com/emails/7/keep?otk=keep-token)"
+	wantActions := "[Open](https://mail.example.com/preview/7?otk=preview-token) · [Keep](https://mail.example.com/api/emails/7/keep?otk=keep-token)"
 	if actions != wantActions {
 		t.Fatalf("actions %q", actions)
 	}
@@ -218,11 +218,11 @@ func TestEmailReceived_PreviewURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := payload["data"].(map[string]any)
-	wantPreview := "https://mail.example.com/emails/preview/7?otk=preview-token"
+	wantPreview := "https://mail.example.com/preview/7?otk=preview-token"
 	if data["preview_url"] != wantPreview {
 		t.Fatalf("preview_url %v, want %q", data["preview_url"], wantPreview)
 	}
-	wantKeep := "https://mail.example.com/emails/7/keep?otk=keep-token"
+	wantKeep := "https://mail.example.com/api/emails/7/keep?otk=keep-token"
 	if data["keep_url"] != wantKeep {
 		t.Fatalf("keep_url %v, want %q", data["keep_url"], wantKeep)
 	}

@@ -10,7 +10,7 @@ import (
 	"mewmail/api/internal/webhook"
 )
 
-// IngestHandler handles POST /internal/ingest from Postfix.
+// IngestHandler handles POST /api/internal/ingest from Postfix.
 type IngestHandler struct {
 	DB      *database.DB
 	Log     *slog.Logger

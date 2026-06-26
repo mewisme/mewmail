@@ -4,7 +4,7 @@ info:
   description: Lightweight self-hosted email receiving REST API
   version: 1.0.0
 servers:
-  - url: http://api:8080
+  - url: http://api:8080/api
     description: Internal Docker network
 security:
   - bearerAuth: []
@@ -65,7 +65,7 @@ paths:
     post:
       operationId: ingestEmail
       summary: Ingest raw RFC822 message (Postfix internal)
-      description: Called by Postfix with `X-Envelope-To` header and raw message body. Uses the same API key as Bearer auth.
+      description: Called by Postfix with `X-Envelope-To` header and raw message body. Uses `internal_key` from `data/.credentials` (not the external REST `api_key`).
       security:
         - bearerAuth: []
       parameters:
@@ -386,7 +386,7 @@ paths:
     get:
       operationId: keepEmailWebhook
       summary: Keep email via webhook link
-      description: Browser-friendly GET used by webhook action links. Uses the separate `keep_otk` from the webhook payload (not consumed on use).
+      description: Browser-friendly GET used by webhook action links. Authenticate with `Authorization: Bearer` (external API key), `?apikey=`, or `?otk=` (keep link token from webhook; not consumed on use).
       security: []
       parameters:
         - $ref: "#/components/parameters/emailId"
@@ -494,40 +494,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PreviewTokenResult"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /emails/preview/{id}:
-    get:
-      operationId: previewEmail
-      summary: Preview email in browser
-      description: Human-readable HTML view. Use `apikey` (reusable) or `otk` (one-time token from webhook). Records first open time in `opened_at`.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/emailId"
-        - name: apikey
-          in: query
-          schema:
-            type: string
-        - name: otk
-          in: query
-          description: One-time preview token (invalid after first view or email deletion)
-          schema:
-            type: string
-      responses:
-        "200":
-          description: HTML preview page
-          content:
-            text/html:
-              schema:
-                type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -785,7 +751,7 @@ components:
         opened_at:
           type: string
           format: date-time
-          description: Set on first open via GET /emails/{id} or preview.
+          description: Set on first open via GET /api/emails/{id} or preview.
         kept:
           type: boolean
           description: When true, the email is excluded from automatic retention cleanup.

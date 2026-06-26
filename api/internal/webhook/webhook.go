@@ -96,14 +96,14 @@ func (c *Client) previewURL(id int64, otk string) string {
 	if c.publicURL == "" || otk == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/emails/preview/%d?otk=%s", c.publicURL, id, otk)
+	return fmt.Sprintf("%s/preview/%d?otk=%s", c.publicURL, id, otk)
 }
 
 func (c *Client) keepURL(id int64, otk string) string {
 	if c.publicURL == "" || otk == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/emails/%d/keep?otk=%s", c.publicURL, id, otk)
+	return fmt.Sprintf("%s/api/emails/%d/keep?otk=%s", c.publicURL, id, otk)
 }
 
 // EmailsCleaned notifies that expired emails were deleted.

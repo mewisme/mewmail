@@ -37,7 +37,7 @@
 
   async function api(path, opts) {
     const key = localStorage.getItem(KEY);
-    const res = await fetch(path, {
+    const res = await fetch('/api' + path, {
       ...opts,
       headers: {
         Authorization: 'Bearer ' + key,
@@ -288,7 +288,7 @@
     renderDetailIfSelected();
     try {
       const key = localStorage.getItem(KEY);
-      const res = await fetch('/emails/' + id + '/raw?track_open=false', {
+      const res = await fetch('/api/emails/' + id + '/raw?track_open=false', {
         headers: { Authorization: 'Bearer ' + key },
       });
       if (res.status === 401) {

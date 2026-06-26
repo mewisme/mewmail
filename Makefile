@@ -32,6 +32,6 @@ backup-db:
 	@echo "Backup written to backups/"
 
 api-curl:
-	$(COMPOSE) exec postfix sh -c 'curl -fsS http://api:$${PORT:-8080}/health'
+	$(COMPOSE) exec postfix sh -c 'curl -fsS http://api:$${PORT:-8080}/api/health'
 
 api-health: api-curl

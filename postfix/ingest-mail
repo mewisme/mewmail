@@ -19,16 +19,15 @@ if [ -r "$TOKEN_FILE" ]; then
 	TOKEN=$(cat "$TOKEN_FILE")
 	log "using token from $TOKEN_FILE"
 elif [ -r "$CRED" ]; then
-	TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+	TOKEN=$(sed -n 's/.*"internal_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
 	log "using token from $CRED"
 else
 	log "ERROR cannot read credentials ($CRED) or token file ($TOKEN_FILE); postfix runs as $(id -un 2>/dev/null || id -u)"
-	log "ERROR ensure api is up and restart postfix after first api start"
 	exit 75
 fi
 
 if [ -z "$TOKEN" ]; then
-	log "ERROR api_key is empty"
+	log "ERROR internal_key is empty"
 	exit 75
 fi
 
@@ -51,7 +50,7 @@ if [ -r "$HOST_FILE" ]; then
 	API_HOST=$(tr -d ' \r\n' <"$HOST_FILE")
 fi
 
-URL="http://${API_HOST}:${API_PORT}/internal/ingest"
+URL="http://${API_HOST}:${API_PORT}/api/internal/ingest"
 TMP=$(mktemp)
 RESP=$(mktemp)
 trap 'rm -f "$TMP" "$RESP"' EXIT
@@ -80,6 +79,6 @@ log "api response http=${HTTP} body=${BODY}"
 
 case "$HTTP" in
 201) log "ok rcpt=${RCPT} bytes=${BYTES}"; exit 0 ;;
-401) log "ERROR unauthorized — api_key mismatch, restart postfix after api generates credentials"; exit 75 ;;
+401) log "ERROR unauthorized — internal_key mismatch"; exit 75 ;;
 *) log "ERROR ingest failed http=${HTTP}"; exit 75 ;;
 esac

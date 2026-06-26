@@ -34,18 +34,18 @@ fi
 postfix set-permissions
 postfix check
 
-# Copy api_key for pipe user (nobody cannot read 0600 files from api container)
+# Copy internal_key for pipe user (nobody cannot read 0600 files from api container)
 ingest_refresh_token() {
 	CRED="${CREDENTIALS_PATH:-/data/.credentials}"
 	TOKEN_FILE=/var/spool/postfix/.ingest-token
 	if [ ! -f "$CRED" ]; then
-		echo "WARN: $CRED not found — start api first, then restart postfix" >&2
-		return 0
+		echo "ERROR: $CRED not found" >&2
+		exit 1
 	fi
-	TOKEN=$(sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
+	TOKEN=$(sed -n 's/.*"internal_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRED" | head -1)
 	if [ -z "$TOKEN" ]; then
-		echo "WARN: api_key missing in $CRED" >&2
-		return 0
+		echo "ERROR: internal_key missing in $CRED" >&2
+		exit 1
 	fi
 	printf '%s' "$TOKEN" >"$TOKEN_FILE"
 	chown nobody:nobody "$TOKEN_FILE"
@@ -62,11 +62,7 @@ printf '%s' "$API_PORT" >"$PORT_FILE"
 printf '%s' "$API_HOST" >"$HOST_FILE"
 chown nobody:nobody "$PORT_FILE" "$HOST_FILE"
 chmod 444 "$PORT_FILE" "$HOST_FILE"
-echo "ingest target http://${API_HOST}:${API_PORT}/internal/ingest" >&2
-
-if ! curl -fsS --max-time 5 "http://${API_HOST}:${API_PORT}/health" >/dev/null; then
-	echo "WARN: api not reachable at http://${API_HOST}:${API_PORT}/health — mail will queue until api is up" >&2
-fi
+echo "ingest target http://${API_HOST}:${API_PORT}/api/internal/ingest" >&2
 
 echo "=== Postfix effective configuration (postconf -n) ==="
 postconf -n

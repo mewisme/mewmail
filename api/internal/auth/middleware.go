@@ -23,12 +23,11 @@ func ValidAPIKey(provided, expected string) bool {
 	return validAPIKey(provided, expected)
 }
 
-// BearerAuth validates Authorization: Bearer <apiKey>.
+// BearerAuth validates Authorization: Bearer <apiKey> or ?apikey=<apiKey>.
 func BearerAuth(apiKey string, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, ok := extractBearer(r.Header.Get("Authorization"))
-			if !ok || !validAPIKey(token, apiKey) {
+			if !ValidRequestAPIKey(r, apiKey) {
 				log.Warn("auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
 				httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
 				return
@@ -38,21 +37,20 @@ func BearerAuth(apiKey string, log *slog.Logger) func(http.Handler) http.Handler
 	}
 }
 
-// QueryAPIKeyAuth validates ?apikey=<apiKey> (browser-friendly links).
+// QueryAPIKeyAuth validates ?apikey=<apiKey> or Authorization: Bearer <apiKey>.
 func QueryAPIKeyAuth(apiKey string, log *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !validAPIKey(r.URL.Query().Get("apikey"), apiKey) {
-				log.Warn("auth failure", "path", r.URL.Path, "remote", r.RemoteAddr)
-				httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
+	return BearerAuth(apiKey, log)
 }
 
-// InternalBearerAuth validates the internal ingestion token.
+// ValidRequestAPIKey reports whether the request carries the external API key via Bearer header or ?apikey=.
+func ValidRequestAPIKey(r *http.Request, expected string) bool {
+	if token, ok := extractBearer(r.Header.Get("Authorization")); ok && validAPIKey(token, expected) {
+		return true
+	}
+	return validAPIKey(r.URL.Query().Get("apikey"), expected)
+}
+
+// InternalBearerAuth validates the internal ingestion token (Bearer header or ?apikey=).
 func InternalBearerAuth(token string, log *slog.Logger) func(http.Handler) http.Handler {
 	return BearerAuth(token, log)
 }

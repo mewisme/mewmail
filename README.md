@@ -7,11 +7,11 @@ Lightweight self-hosted email receiving service. Postfix accepts inbound SMTP fo
 ## Architecture
 
 ```
-Internet SMTP :25 → Postfix → ingest-mail → POST /internal/ingest → Go API → SQLite
+Internet SMTP :25 → Postfix → ingest-mail → POST /api/internal/ingest → Go API → SQLite
 ```
 
 - **Public ports:** `25` (SMTP) and `PORT` (API, default `8080`) — both from `.env`
-- **Internal auth:** Postfix reads `api_key` from `data/.credentials` (same key as the REST API)
+- **Internal auth:** Postfix reads `internal_key` from `data/.credentials` (separate from the external REST `api_key`)
 
 ## Quick start
 
@@ -21,7 +21,7 @@ cp .env.example .env
 mkdir -p data && chmod 700 data
 docker compose pull
 docker compose up -d
-docker compose logs api   # capture API key on first startup
+docker compose logs api   # capture API keys on first startup
 ```
 
 See [docs/deployment.md](docs/deployment.md) for DNS, firewall, and updates.

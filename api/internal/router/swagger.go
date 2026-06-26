@@ -64,7 +64,7 @@ func patchOpenAPIServers(data []byte, origin string) []byte {
 	if i < 0 {
 		return data
 	}
-	insert := fmt.Sprintf("  - url: %s\n    description: Current browser\n", origin)
+	insert := fmt.Sprintf("  - url: %s/api\n    description: Current browser\n", origin)
 	at := i + len(marker)
 	return []byte(s[:at] + insert + s[at:])
 }

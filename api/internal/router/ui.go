@@ -43,8 +43,9 @@ func injectUIHTML(data []byte) []byte {
 func mountUI(r interface {
 	Get(pattern string, handlerFn http.HandlerFunc)
 	Handle(pattern string, handler http.Handler)
-}) {
+}, preview http.HandlerFunc) {
 	r.Get("/", uiIndexHandler)
+	r.Get("/preview/{id}", preview)
 	sub, err := fs.Sub(uiFS, "static/ui")
 	if err != nil {
 		panic(err)

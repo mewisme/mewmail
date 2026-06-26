@@ -19,6 +19,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	cfg, err := config.Load()
@@ -27,13 +31,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	apiKey, generated, err := auth.LoadOrCreateAPIKey(cfg.CredentialsPath)
+	creds, changes, err := auth.LoadOrCreateCredentials(cfg.CredentialsPath)
 	if err != nil {
 		log.Error("credentials error", "error", err)
 		os.Exit(1)
 	}
-	if generated {
-		fmt.Fprintf(os.Stdout, "\n=== MewMailAPI: API key generated (save this, shown once) ===\n%s\n============================================================\n\n", apiKey)
+	if changes.CreatedExternal && changes.CreatedInternal {
+		fmt.Fprintf(os.Stdout, "\n=== MewMailAPI: credentials generated (save these, shown once) ===\nExternal API key: %s\nInternal ingest key: %s\n============================================================\n\n", creds.ExternalAPIKey, creds.InternalAPIKey)
+	} else if changes.CreatedInternal {
+		fmt.Fprintf(os.Stdout, "\n=== MewMailAPI: internal ingest key generated (shown once) ===\n%s\n============================================================\n\n", creds.InternalAPIKey)
 	}
 
 	db, err := database.Open(cfg.DBPath)
@@ -54,7 +60,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%s", cfg.APIHost, cfg.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      router.New(router.Deps{Config: cfg, DB: db, Log: log, APIKey: apiKey, Webhook: wh}),
+		Handler: router.New(router.Deps{Config: cfg, DB: db, Log: log, APIKey: creds.ExternalAPIKey, InternalAPIKey: creds.InternalAPIKey, Webhook: wh}),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -76,4 +82,21 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = srv.Shutdown(shutdownCtx)
+}
+
+func runHealthcheck() int {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/api/health/ready")
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

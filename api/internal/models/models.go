@@ -39,6 +39,7 @@ type EmailList struct {
 
 // CredentialsFile is persisted at data/.credentials.
 type CredentialsFile struct {
-	APIKey    string    `json:"api_key"`
-	CreatedAt time.Time `json:"created_at"`
+	APIKey      string    `json:"api_key"`      // external REST/UI
+	InternalKey string    `json:"internal_key"` // Postfix ingest only
+	CreatedAt   time.Time `json:"created_at"`
 }

@@ -14,7 +14,7 @@ cp .env.example .env
 mkdir -p data && chmod 700 data
 docker compose pull
 docker compose up -d
-docker compose logs api   # capture API key on first startup
+docker compose logs api   # capture API keys on first startup
 ```
 
 For local builds:
@@ -23,7 +23,9 @@ For local builds:
 docker compose up -d --build
 ```
 
-On first startup the API generates an API key and prints it **once** to the API container logs. It is also stored in `data/.credentials` (mode `0600`).
+On first startup the API generates external (`api_key`) and internal (`internal_key`) credentials and prints them **once** to the API container logs. They are stored in `data/.credentials` (mode `0644` so Postfix can read `internal_key` from the shared volume). Postfix waits for the API health check before starting, so credentials are always present when ingest begins.
+
+When upgrading from a single-key install, the API keeps your existing `api_key`, generates `internal_key`, and prints the new internal key once. Restart both containers (`docker compose up -d`) so Postfix reloads the token.
 
 ## DNS configuration
 

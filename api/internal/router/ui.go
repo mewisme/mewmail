@@ -22,7 +22,8 @@ const (
 )
 
 func cdnHead() string {
-	return `<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+	return `<script src="/ui/static/theme-init.js?v=__V__"></script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="` + cdnBootstrapCSS + `" crossorigin>
 <link rel="preload" href="/ui/static/ui.css?v=__V__" as="style">
 <link rel="stylesheet" href="/ui/static/ui.css?v=__V__">`

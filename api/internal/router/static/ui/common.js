@@ -1,3 +1,32 @@
+const THEME_KEY = 'mewmail_theme';
+
+function syncThemeToggleLabels(theme) {
+  const label = theme === 'dark' ? 'Light' : 'Dark';
+  const aria = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+    btn.textContent = label;
+    btn.setAttribute('aria-label', aria);
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-bs-theme', theme);
+  localStorage.setItem(THEME_KEY, theme);
+  syncThemeToggleLabels(theme);
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-bs-theme');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+
+function initThemeToggles() {
+  document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+    btn.addEventListener('click', toggleTheme);
+  });
+  syncThemeToggleLabels(document.documentElement.getAttribute('data-bs-theme') || 'light');
+}
+
 function emailTitle(email) {
   return email.subject || 'Email #' + email.id;
 }

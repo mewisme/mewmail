@@ -107,7 +107,7 @@
       }
 
       const meta = document.createElement('div');
-      meta.className = 'row-meta text-muted text-truncate';
+      meta.className = 'row-meta text-truncate';
       meta.textContent = (e.mail_from || '?') + ' → ' + (e.rcpt_to || '?');
 
       row.appendChild(subj);
@@ -388,6 +388,7 @@
   });
 
   (async function init() {
+    initThemeToggles();
     const saved = localStorage.getItem(KEY);
     if (!saved) return;
     keyInput.value = saved;

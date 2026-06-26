@@ -10,7 +10,10 @@
   <main id="gate" class="container py-5">
     <div class="card mx-auto col-md-5">
       <div class="card-body">
-        <h2 class="card-title h5 mb-3">Connect</h2>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="card-title h5 mb-0">Connect</h2>
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-theme-toggle>Dark</button>
+        </div>
         <label for="api-key" class="form-label">API key</label>
         <input id="api-key" type="password" class="form-control mb-3" autocomplete="off" placeholder="Enter Authorization token">
         <button id="save-key" type="button" class="btn btn-primary w-100">Connect</button>
@@ -20,9 +23,10 @@
   </main>
 
   <div id="app" class="d-none">
-    <header class="navbar navbar-light border-bottom px-3">
+    <header class="navbar bg-body border-bottom px-3">
       <span class="navbar-brand mb-0">MewMail</span>
       <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-theme-toggle>Dark</button>
         <button id="refresh" type="button" class="btn btn-outline-secondary btn-sm">Refresh</button>
         <button id="clear-key" type="button" class="btn btn-outline-secondary btn-sm">Clear key</button>
       </div>

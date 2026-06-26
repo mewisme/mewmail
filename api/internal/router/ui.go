@@ -15,20 +15,22 @@ import (
 
 // ponytail: pinned CDN libs; bump versions here only
 const (
-	cdnPicoCSS     = "https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
-	cdnDOMPurifyJS = "https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"
-	cdnDayjsJS     = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"
+	cdnBootstrapCSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+	cdnBootstrapJS  = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+	cdnDOMPurifyJS  = "https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"
+	cdnDayjsJS      = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"
 )
 
 func cdnHead() string {
 	return `<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="` + cdnPicoCSS + `" crossorigin>
+<link rel="stylesheet" href="` + cdnBootstrapCSS + `" crossorigin>
 <link rel="preload" href="/ui/static/ui.css?v=__V__" as="style">
 <link rel="stylesheet" href="/ui/static/ui.css?v=__V__">`
 }
 
 func cdnScripts() string {
-	return `<script defer src="` + cdnDOMPurifyJS + `" crossorigin></script>
+	return `<script defer src="` + cdnBootstrapJS + `" crossorigin></script>
+<script defer src="` + cdnDOMPurifyJS + `" crossorigin></script>
 <script defer src="` + cdnDayjsJS + `" crossorigin></script>`
 }
 

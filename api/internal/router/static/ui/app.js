@@ -19,20 +19,21 @@
 
   function setStatus(msg, isErr) {
     statusEl.textContent = msg || '';
-    statusEl.classList.toggle('err', !!isErr);
+    statusEl.classList.toggle('text-danger', !!isErr);
+    statusEl.classList.toggle('text-muted', !isErr);
   }
 
   function showGate(err) {
-    app.classList.add('hidden');
-    gate.classList.remove('hidden');
+    app.classList.add('d-none');
+    gate.classList.remove('d-none');
     gateErr.textContent = err || '';
-    gateErr.classList.toggle('hidden', !err);
+    gateErr.classList.toggle('d-none', !err);
     stopWait();
   }
 
   function showApp() {
-    gate.classList.add('hidden');
-    app.classList.remove('hidden');
+    gate.classList.add('d-none');
+    app.classList.remove('d-none');
   }
 
   async function api(path, opts) {
@@ -66,10 +67,10 @@
   }
 
   function setActiveRow(id) {
-    const prev = listEl.querySelector('.list-item.active');
+    const prev = listEl.querySelector('.list-group-item.active');
     if (prev) prev.classList.remove('active');
     if (id == null) return;
-    const next = listEl.querySelector('.list-item[data-id="' + id + '"]');
+    const next = listEl.querySelector('.list-group-item[data-id="' + id + '"]');
     if (next) next.classList.add('active');
   }
 
@@ -84,8 +85,9 @@
       return;
     }
     for (const e of emails) {
-      const row = document.createElement('div');
-      row.className = 'list-item' + (e.id === selectedId ? ' active' : '');
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'list-group-item list-group-item-action' + (e.id === selectedId ? ' active' : '');
       row.dataset.id = String(e.id);
 
       const subj = document.createElement('div');
@@ -93,19 +95,19 @@
       subj.textContent = e.subject || '(no subject)';
       if (e.kept) {
         const b = document.createElement('span');
-        b.className = 'badge kept';
+        b.className = 'badge bg-success';
         b.textContent = 'kept';
         subj.appendChild(b);
       }
       if (e.opened_at) {
         const b = document.createElement('span');
-        b.className = 'badge opened';
+        b.className = 'badge bg-warning text-dark';
         b.textContent = 'opened';
         subj.appendChild(b);
       }
 
       const meta = document.createElement('div');
-      meta.className = 'row-meta';
+      meta.className = 'row-meta text-muted text-truncate';
       meta.textContent = (e.mail_from || '?') + ' → ' + (e.rcpt_to || '?');
 
       row.appendChild(subj);
@@ -118,7 +120,7 @@
   function renderDetailEmpty() {
     detailEl.replaceChildren();
     const p = document.createElement('p');
-    p.className = 'detail-empty';
+    p.className = 'detail-empty text-muted text-center py-5';
     p.textContent = 'Select an email';
     detailEl.appendChild(p);
     selectedEmail = null;
@@ -126,23 +128,25 @@
 
   function renderDetailActions(email) {
     const actions = document.createElement('div');
-    actions.className = 'actions';
+    actions.className = 'd-flex flex-wrap gap-2 mb-3';
 
     const keepBtn = document.createElement('button');
     keepBtn.type = 'button';
+    keepBtn.className = 'btn btn-sm btn-outline-primary';
     keepBtn.textContent = email.kept ? 'Unkeep' : 'Keep';
     keepBtn.disabled = busy;
     keepBtn.addEventListener('click', () => toggleKeep(email));
 
     const rawBtn = document.createElement('button');
     rawBtn.type = 'button';
+    rawBtn.className = 'btn btn-sm btn-outline-secondary';
     rawBtn.textContent = 'Download raw';
     rawBtn.disabled = busy;
     rawBtn.addEventListener('click', () => downloadRaw(email.id));
 
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
-    delBtn.className = 'danger';
+    delBtn.className = 'btn btn-sm btn-outline-danger';
     delBtn.textContent = 'Delete';
     delBtn.disabled = busy;
     delBtn.addEventListener('click', () => deleteEmail(email.id));
@@ -334,7 +338,7 @@
   }
 
   listEl.addEventListener('click', (e) => {
-    const row = e.target.closest('.list-item');
+    const row = e.target.closest('.list-group-item');
     if (!row) return;
     selectEmail(Number(row.dataset.id));
   });
@@ -343,7 +347,7 @@
     const key = keyInput.value.trim();
     if (!key) {
       gateErr.textContent = 'Enter an API key';
-      gateErr.classList.remove('hidden');
+      gateErr.classList.remove('d-none');
       return;
     }
     localStorage.setItem(KEY, key);
@@ -354,7 +358,7 @@
     } catch (err) {
       if (err.message !== 'unauthorized') {
         gateErr.textContent = err.message;
-        gateErr.classList.remove('hidden');
+        gateErr.classList.remove('d-none');
       }
     }
   });

@@ -24,8 +24,11 @@ func TestUIIndexHandler(t *testing.T) {
 	if !strings.Contains(body, "/ui/static/ui.css") {
 		t.Fatal("missing ui.css link")
 	}
-	if !strings.Contains(body, "cdn.jsdelivr.net/npm/@picocss/pico") {
-		t.Fatal("missing Pico CSS CDN")
+	if !strings.Contains(body, "cdn.jsdelivr.net/npm/bootstrap@5.3.3") {
+		t.Fatal("missing Bootstrap CDN")
+	}
+	if !strings.Contains(body, "bootstrap.bundle.min.js") {
+		t.Fatal("missing Bootstrap JS CDN")
 	}
 	if !strings.Contains(body, "dompurify") {
 		t.Fatal("missing DOMPurify CDN")

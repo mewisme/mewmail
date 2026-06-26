@@ -7,34 +7,41 @@
   __CDN_HEAD__
 </head>
 <body>
-  <main id="gate" class="container gate">
-    <article>
-      <header><h2>Connect</h2></header>
-      <label for="api-key">API key</label>
-      <input id="api-key" type="password" autocomplete="off" placeholder="Enter Authorization token">
-      <button id="save-key" type="button">Connect</button>
-      <p id="gate-err" class="err hidden"></p>
-    </article>
+  <main id="gate" class="container py-5">
+    <div class="card mx-auto col-md-5">
+      <div class="card-body">
+        <h2 class="card-title h5 mb-3">Connect</h2>
+        <label for="api-key" class="form-label">API key</label>
+        <input id="api-key" type="password" class="form-control mb-3" autocomplete="off" placeholder="Enter Authorization token">
+        <button id="save-key" type="button" class="btn btn-primary w-100">Connect</button>
+        <div id="gate-err" class="alert alert-danger mt-3 mb-0 d-none" role="alert"></div>
+      </div>
+    </div>
   </main>
 
-  <div id="app" class="hidden">
-    <header class="app-header">
-      <strong>MewMail</strong>
-      <div class="app-header-actions">
-        <button id="refresh" type="button" class="secondary">Refresh</button>
-        <button id="clear-key" type="button" class="outline">Clear key</button>
+  <div id="app" class="d-none">
+    <header class="navbar navbar-light border-bottom px-3">
+      <span class="navbar-brand mb-0">MewMail</span>
+      <div class="d-flex gap-2">
+        <button id="refresh" type="button" class="btn btn-outline-secondary btn-sm">Refresh</button>
+        <button id="clear-key" type="button" class="btn btn-outline-secondary btn-sm">Clear key</button>
       </div>
     </header>
-    <div class="toolbar">
-      <input id="filter-to" type="search" placeholder="Filter by recipient (to)">
-      <button id="apply-filter" type="button" class="secondary">Apply</button>
-      <label><input id="auto-wait" type="checkbox" role="switch"> Auto-wait for new mail</label>
+    <div class="d-flex flex-wrap gap-2 align-items-center px-3 py-2 border-bottom">
+      <input id="filter-to" type="search" class="form-control form-control-sm" style="max-width: 20rem" placeholder="Filter by recipient (to)">
+      <button id="apply-filter" type="button" class="btn btn-secondary btn-sm">Apply</button>
+      <div class="form-check form-switch mb-0">
+        <input id="auto-wait" class="form-check-input" type="checkbox" role="switch">
+        <label class="form-check-label" for="auto-wait">Auto-wait for new mail</label>
+      </div>
     </div>
-    <p id="status" class="status"></p>
-    <div class="layout">
-      <div id="list" class="list"></div>
-      <div id="detail" class="detail">
-        <p class="detail-empty">Select an email</p>
+    <p id="status" class="small text-muted px-3 mb-0 py-1"></p>
+    <div class="row g-0 layout">
+      <div class="col-md-4 border-end list-col">
+        <div id="list" class="list-group list-group-flush"></div>
+      </div>
+      <div id="detail" class="col-md-8 detail">
+        <p class="detail-empty text-muted text-center py-5">Select an email</p>
       </div>
     </div>
   </div>

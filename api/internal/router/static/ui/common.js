@@ -66,6 +66,7 @@ function renderEmail(email, container) {
     strong.textContent = 'Attachments:';
     box.appendChild(strong);
     const ul = document.createElement('ul');
+    ul.className = 'list-unstyled mb-0';
     for (const a of email.attachments) {
       const li = document.createElement('li');
       li.textContent = a.filename + ' (' + a.content_type + ', ' + a.size + ' bytes)';

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MewMail</title>
+  __CDN_HEAD__
+</head>
+<body>
+  <main id="gate" class="container gate">
+    <article>
+      <header><h2>Connect</h2></header>
+      <label for="api-key">API key</label>
+      <input id="api-key" type="password" autocomplete="off" placeholder="Bearer token from data/.credentials">
+      <button id="save-key" type="button">Connect</button>
+      <p id="gate-err" class="err hidden"></p>
+    </article>
+  </main>
+
+  <div id="app" class="hidden">
+    <header class="app-header">
+      <strong>MewMail</strong>
+      <div class="app-header-actions">
+        <button id="refresh" type="button" class="secondary">Refresh</button>
+        <button id="clear-key" type="button" class="outline">Clear key</button>
+      </div>
+    </header>
+    <div class="toolbar">
+      <input id="filter-to" type="search" placeholder="Filter by recipient (to)">
+      <button id="apply-filter" type="button" class="secondary">Apply</button>
+      <label><input id="auto-wait" type="checkbox" role="switch"> Auto-wait for new mail</label>
+    </div>
+    <p id="status" class="status"></p>
+    <div class="layout">
+      <div id="list" class="list"></div>
+      <div id="detail" class="detail">
+        <p class="detail-empty">Select an email</p>
+      </div>
+    </div>
+  </div>
+
+  __CDN_SCRIPTS__
+  <script defer src="/ui/static/common.js?v=__V__"></script>
+  <script defer src="/ui/static/app.js?v=__V__"></script>
+</body>
+</html>

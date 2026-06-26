@@ -125,60 +125,70 @@ func (c *Client) EmailsCleaned(count int64, cutoff time.Time, retentionHours int
 }
 
 func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, previewOTK, keepOTK string, at time.Time) discordEmbed {
+	unixTime := at.Unix()
+	
 	fields := []discordField{
-		{Name: "ID", Value: fmt.Sprintf("`#%d`", id), Inline: true},
+		{Name: "Sender", Value: fmt.Sprintf("`%s`", from), Inline: true},
+		{Name: "Recipient", Value: fmt.Sprintf("`%s`", to), Inline: true},
+		{Name: "Received At", Value: fmt.Sprintf("<t:%d:F> (<t:%d:R>)", unixTime, unixTime), Inline: false},
 	}
+
 	if messageID != "" {
 		fields = append(fields, discordField{
-			Name:   "Message-ID",
+			Name:   "Message ID",
 			Value:  codeQuote(truncate(messageID, 200)),
 			Inline: false,
 		})
 	}
+
 	if actions := c.actionLinks(id, previewOTK, keepOTK); actions != "" {
-		fields = append(fields, discordField{Name: "Actions", Value: actions, Inline: false})
+		fields = append(fields, discordField{
+			Name:   "Actions",
+			Value:  "» " + actions,
+			Inline: false,
+		})
 	}
+
 	return discordEmbed{
-		Title: "New email",
-		Description: embedBody(subject,
-			fmt.Sprintf("**%s** → **%s**", from, to),
-		),
-		Color:       0x57F287,
+		Title:       fmt.Sprintf("Email Inbound | #%d", id),
+		Description: fmt.Sprintf("> %s", displaySubject(subject)),
+		Color:       0x57F287, // Green (Xanh lá cây thành công)
 		Timestamp:   at.Format(time.RFC3339),
-		Footer:      newDiscordFooter("New email"),
 		Fields:      fields,
+		Footer:      newDiscordFooter("Inbound Notification"),
 	}
 }
 
 func (c *Client) emailOpenedEmbed(id int64, from, to, subject, via string, at time.Time) discordEmbed {
+	unixTime := at.Unix()
+
 	return discordEmbed{
-		Title: "Email opened",
-		Description: embedBody(subject,
-			fmt.Sprintf("First opened via **%s**", formatVia(via)),
-		),
-		Color:     0x5865F2,
-		Timestamp: at.Format(time.RFC3339),
-		Footer:    newDiscordFooter("Email opened"),
+		Title:       fmt.Sprintf("Email Opened | #%d", id),
+		Description: fmt.Sprintf("> %s\n\nOpened via: **%s**", displaySubject(subject), formatVia(via)),
+		Color:       0x5865F2, // Blurple (Xanh dương Discord)
+		Timestamp:   at.Format(time.RFC3339),
 		Fields: []discordField{
-			{Name: "From", Value: from, Inline: true},
-			{Name: "To", Value: to, Inline: true},
-			{Name: "ID", Value: fmt.Sprintf("`#%d`", id), Inline: true},
-			{Name: "Opened", Value: formatTime(at), Inline: false},
+			{Name: "Sender", Value: fmt.Sprintf("`%s`", from), Inline: true},
+			{Name: "Recipient", Value: fmt.Sprintf("`%s`", to), Inline: true},
+			{Name: "Opened At", Value: fmt.Sprintf("<t:%d:F> (<t:%d:R>)", unixTime, unixTime), Inline: false},
 		},
+		Footer: newDiscordFooter("Telemetry Event"),
 	}
 }
 
 func (c *Client) emailsCleanedEmbed(count int64, cutoff time.Time, retentionHours int, at time.Time) discordEmbed {
+	unixCutoff := cutoff.Unix()
+
 	return discordEmbed{
-		Title:       "Retention cleanup",
-		Description: fmt.Sprintf("**%d** email(s) removed", count),
-		Color:       0xFEE75C,
+		Title:       "Data Retention Cleanup",
+		Description: fmt.Sprintf("> Automated storage optimization successfully completed.\n\n**Status:** Completed\n**Purged:** %d email(s)", count),
+		Color:       0xFEE75C, // Yellow (Vàng cảnh báo hệ thống)
 		Timestamp:   at.Format(time.RFC3339),
-		Footer:      newDiscordFooter("Cleanup"),
 		Fields: []discordField{
-			{Name: "Older than", Value: formatTime(cutoff), Inline: true},
-			{Name: "Retention", Value: fmt.Sprintf("%d hours", retentionHours), Inline: true},
+			{Name: "Retention Policy", Value: fmt.Sprintf("%d hours", retentionHours), Inline: true},
+			{Name: "Cutoff Threshold", Value: fmt.Sprintf("<t:%d:F>", unixCutoff), Inline: true},
 		},
+		Footer:      newDiscordFooter("System Maintenance"),
 	}
 }
 
@@ -282,11 +292,6 @@ func displaySubject(subject string) string {
 	return "(no subject)"
 }
 
-func embedBody(subject string, lines ...string) string {
-	parts := append([]string{"**" + displaySubject(subject) + "**"}, lines...)
-	return strings.Join(parts, "\n\n")
-}
-
 func formatVia(via string) string {
 	switch via {
 	case "preview":
@@ -296,10 +301,6 @@ func formatVia(via string) string {
 	default:
 		return via
 	}
-}
-
-func formatTime(t time.Time) string {
-	return t.UTC().Format("2 Jan 2006, 15:04 UTC")
 }
 
 func codeQuote(s string) string {

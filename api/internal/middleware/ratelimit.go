@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -33,16 +35,26 @@ func RateLimit(limit int, window time.Duration) func(http.Handler) http.Handler 
 
 func (rl *rateLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = fwd
-		}
-		if !rl.allow(ip) {
+		if !rl.allow(clientIP(r)) {
 			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		if i := strings.IndexByte(fwd, ','); i >= 0 {
+			return strings.TrimSpace(fwd[:i])
+		}
+		return strings.TrimSpace(fwd)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func (rl *rateLimiter) allow(key string) bool {
@@ -51,8 +63,13 @@ func (rl *rateLimiter) allow(key string) bool {
 	now := time.Now()
 	b, ok := rl.visits[key]
 	if !ok || now.After(b.resetAt) {
-		if !ok && len(rl.visits) >= rl.maxKeys {
-			return false
+		if !ok {
+			if len(rl.visits) >= rl.maxKeys {
+				rl.evictExpired(now)
+			}
+			if len(rl.visits) >= rl.maxKeys {
+				return false
+			}
 		}
 		rl.visits[key] = &bucket{count: 1, resetAt: now.Add(rl.window)}
 		return true
@@ -62,4 +79,12 @@ func (rl *rateLimiter) allow(key string) bool {
 	}
 	b.count++
 	return true
+}
+
+func (rl *rateLimiter) evictExpired(now time.Time) {
+	for k, b := range rl.visits {
+		if now.After(b.resetAt) {
+			delete(rl.visits, k)
+		}
+	}
 }

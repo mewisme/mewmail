@@ -13,53 +13,69 @@ import (
 
 // EmailFilter holds list/delete query parameters.
 type EmailFilter struct {
-	From    string
-	To      string
-	Subject string
-	After   *time.Time
-	Before  *time.Time
-	Limit   int
-	Offset  int
+	From      string
+	To        string
+	Subject   string
+	MessageID string
+	After     *time.Time
+	Before    *time.Time
+	Kept      *bool
+	Opened    *bool
+	SinceID   int64
+	Limit     int
+	Offset    int
+}
+
+// EmailStats holds aggregate mailbox counts.
+type EmailStats struct {
+	Total           int        `json:"total"`
+	Kept            int        `json:"kept"`
+	Unopened        int        `json:"unopened"`
+	OldestCreatedAt *time.Time `json:"oldest_created_at,omitempty"`
 }
 
 // InsertEmail stores an email and its attachment metadata in a transaction.
-// Returns the new row id and a one-time preview token.
-func (db *DB) InsertEmail(ctx context.Context, e *models.Email) (int64, string, error) {
+// Returns the new row id, a one-time preview token, and a reusable keep link token.
+func (db *DB) InsertEmail(ctx context.Context, e *models.Email) (int64, string, string, error) {
 	previewOTK, err := auth.GenerateToken()
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
+	}
+	keepOTK, err := auth.GenerateToken()
+	if err != nil {
+		return 0, "", "", err
 	}
 
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 	defer tx.Rollback()
 
 	created := e.CreatedAt.UTC().Format(time.RFC3339)
 	res, err := tx.StmtContext(ctx, db.insertEmail).ExecContext(ctx,
 		e.MessageID, e.MailFrom, e.RcptTo, e.Subject, e.MailDate,
-		e.TextBody, e.HTMLBody, e.HeadersJSON, e.RawEmail, created, previewOTK,
+		e.TextBody, e.HTMLBody, e.HeadersJSON, e.RawEmail, created, previewOTK, keepOTK,
 	)
 	if err != nil {
-		return 0, "", fmt.Errorf("insert email: %w", err)
+		return 0, "", "", fmt.Errorf("insert email: %w", err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	insAttach := tx.StmtContext(ctx, db.insertAttach)
 	for _, a := range e.Attachments {
 		if _, err := insAttach.ExecContext(ctx, id, a.Filename, a.ContentType, a.Size); err != nil {
-			return 0, "", fmt.Errorf("insert attachment: %w", err)
+			return 0, "", "", fmt.Errorf("insert attachment: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
-	return id, previewOTK, nil
+	return id, previewOTK, keepOTK, nil
 }
 
 // ValidPreviewOTK checks a preview token without clearing it.
@@ -68,7 +84,7 @@ func (db *DB) ValidPreviewOTK(ctx context.Context, id int64, otk string) (bool, 
 		return false, nil
 	}
 	var one int
-	err := db.checkOTK.QueryRowContext(ctx, id, otk).Scan(&one)
+	err := db.checkPreviewOTK.QueryRowContext(ctx, id, otk).Scan(&one)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -83,12 +99,47 @@ func (db *DB) ConsumePreviewOTK(ctx context.Context, id int64, otk string) (bool
 	if otk == "" {
 		return false, nil
 	}
-	res, err := db.consumeOTK.ExecContext(ctx, id, otk)
+	res, err := db.consumePreviewOTK.ExecContext(ctx, id, otk)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// ValidKeepOTK checks the keep link token (not consumed on use).
+func (db *DB) ValidKeepOTK(ctx context.Context, id int64, otk string) (bool, error) {
+	if otk == "" {
+		return false, nil
+	}
+	var one int
+	err := db.checkKeepOTK.QueryRowContext(ctx, id, otk).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// GetLinkOTKs returns preview and keep tokens for link generation. ok is false if missing.
+func (db *DB) GetLinkOTKs(ctx context.Context, id int64) (previewOTK, keepOTK string, ok bool, err error) {
+	var preview, keep sql.NullString
+	err = db.conn.QueryRowContext(ctx, `SELECT preview_otk, keep_otk FROM emails WHERE id = ?`, id).Scan(&preview, &keep)
+	if err == sql.ErrNoRows {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	if preview.Valid {
+		previewOTK = preview.String
+	}
+	if keep.Valid {
+		keepOTK = keep.String
+	}
+	return previewOTK, keepOTK, true, nil
 }
 
 // GetEmail returns a single email by ID.
@@ -165,6 +216,56 @@ func (db *DB) ListEmails(ctx context.Context, f EmailFilter) ([]models.Email, in
 	return emails, total, nil
 }
 
+// EmailExists reports whether an email row exists.
+func (db *DB) EmailExists(ctx context.Context, id int64) (bool, error) {
+	var one int
+	err := db.conn.QueryRowContext(ctx, `SELECT 1 FROM emails WHERE id = ? LIMIT 1`, id).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// EmailStats returns aggregate counts for the mailbox.
+func (db *DB) EmailStats(ctx context.Context) (*EmailStats, error) {
+	var s EmailStats
+	var oldest sql.NullString
+	err := db.conn.QueryRowContext(ctx, `
+		SELECT COUNT(*),
+			COALESCE(SUM(CASE WHEN kept = 1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END), 0),
+			MIN(created_at)
+		FROM emails`).Scan(&s.Total, &s.Kept, &s.Unopened, &oldest)
+	if err != nil {
+		return nil, err
+	}
+	if oldest.Valid {
+		t, _ := time.Parse(time.RFC3339, oldest.String)
+		s.OldestCreatedAt = &t
+	}
+	return &s, nil
+}
+
+// RegeneratePreviewOTK replaces the preview token for an email. ok is false if missing.
+func (db *DB) RegeneratePreviewOTK(ctx context.Context, id int64) (otk string, ok bool, err error) {
+	otk, err = auth.GenerateToken()
+	if err != nil {
+		return "", false, err
+	}
+	res, err := db.regenOTK.ExecContext(ctx, otk, id)
+	if err != nil {
+		return "", false, err
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		return otk, true, nil
+	}
+	return "", false, nil
+}
+
 // KeepEmail marks an email to survive automatic retention cleanup.
 // Status is "kept" on first call or "already_kept" when unchanged. ok is false if missing.
 func (db *DB) KeepEmail(ctx context.Context, id int64) (status string, ok bool, err error) {
@@ -186,6 +287,31 @@ func (db *DB) KeepEmail(ctx context.Context, id int64) (status string, ok bool, 
 	}
 	if kept != 0 {
 		return "already_kept", true, nil
+	}
+	return "", false, nil
+}
+
+// UnkeepEmail clears the retention keep flag.
+// Status is "unkept" on first call or "already_unkept" when unchanged. ok is false if missing.
+func (db *DB) UnkeepEmail(ctx context.Context, id int64) (status string, ok bool, err error) {
+	res, err := db.unkeepEmail.ExecContext(ctx, id)
+	if err != nil {
+		return "", false, err
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		return "unkept", true, nil
+	}
+	var kept int
+	err = db.conn.QueryRowContext(ctx, `SELECT kept FROM emails WHERE id = ?`, id).Scan(&kept)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if kept == 0 {
+		return "already_unkept", true, nil
 	}
 	return "", false, nil
 }
@@ -273,6 +399,14 @@ func buildWhere(f EmailFilter) (string, []any) {
 		clauses = append(clauses, "subject LIKE ?")
 		args = append(args, "%"+f.Subject+"%")
 	}
+	if f.MessageID != "" {
+		clauses = append(clauses, "message_id = ?")
+		args = append(args, f.MessageID)
+	}
+	if f.SinceID > 0 {
+		clauses = append(clauses, "id > ?")
+		args = append(args, f.SinceID)
+	}
 	if f.After != nil {
 		clauses = append(clauses, "created_at >= ?")
 		args = append(args, f.After.UTC().Format(time.RFC3339))
@@ -280,6 +414,21 @@ func buildWhere(f EmailFilter) (string, []any) {
 	if f.Before != nil {
 		clauses = append(clauses, "created_at <= ?")
 		args = append(args, f.Before.UTC().Format(time.RFC3339))
+	}
+	if f.Kept != nil {
+		clauses = append(clauses, "kept = ?")
+		if *f.Kept {
+			args = append(args, 1)
+		} else {
+			args = append(args, 0)
+		}
+	}
+	if f.Opened != nil {
+		if *f.Opened {
+			clauses = append(clauses, "opened_at IS NOT NULL")
+		} else {
+			clauses = append(clauses, "opened_at IS NULL")
+		}
 	}
 	if len(clauses) == 0 {
 		return "", args

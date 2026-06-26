@@ -39,10 +39,10 @@ func TestCleaner_DeletesExpired(t *testing.T) {
 		CreatedAt:   time.Now().UTC(),
 	}
 
-	if _, _, err := db.InsertEmail(context.Background(), old); err != nil {
+	if _, _, _, err := db.InsertEmail(context.Background(), old); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := db.InsertEmail(context.Background(), newer); err != nil {
+	if _, _, _, err := db.InsertEmail(context.Background(), newer); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +84,7 @@ func TestCleaner_SkipsKeptEmail(t *testing.T) {
 		RawEmail:    []byte("raw"),
 		CreatedAt:   time.Now().UTC().Add(-250 * time.Hour),
 	}
-	id, _, err := db.InsertEmail(context.Background(), old)
+	id, _, _, err := db.InsertEmail(context.Background(), old)
 	if err != nil {
 		t.Fatal(err)
 	}

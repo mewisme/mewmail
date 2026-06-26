@@ -41,6 +41,15 @@ CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);
 	if err := addColumnIfMissing(conn, "emails", "preview_otk", "TEXT"); err != nil {
 		return err
 	}
+	if err := addColumnIfMissing(conn, "emails", "keep_otk", "TEXT"); err != nil {
+		return err
+	}
+	if _, err := conn.Exec(`UPDATE emails SET keep_otk = preview_otk WHERE keep_otk IS NULL AND preview_otk IS NOT NULL`); err != nil {
+		return err
+	}
+	if _, err := conn.Exec(`UPDATE emails SET keep_otk = lower(hex(randomblob(16))) WHERE keep_otk IS NULL`); err != nil {
+		return err
+	}
 	if err := addColumnIfMissing(conn, "emails", "kept", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}

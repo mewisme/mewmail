@@ -45,7 +45,7 @@ func (c *Client) Enabled() bool {
 }
 
 // EmailReceived notifies that a new email was stored.
-func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOTK string) {
+func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOTK, keepOTK string) {
 	if !c.Enabled() {
 		return
 	}
@@ -60,11 +60,11 @@ func (c *Client) EmailReceived(id int64, from, to, subject, messageID, previewOT
 	if previewURL := c.previewURL(id, previewOTK); previewURL != "" {
 		data["preview_url"] = previewURL
 	}
-	if keepURL := c.keepURL(id, previewOTK); keepURL != "" {
+	if keepURL := c.keepURL(id, keepOTK); keepURL != "" {
 		data["keep_url"] = keepURL
 	}
 	if c.discord {
-		go c.postDiscord(c.emailReceivedEmbed(id, from, to, subject, messageID, previewOTK, now))
+		go c.postDiscord(c.emailReceivedEmbed(id, from, to, subject, messageID, previewOTK, keepOTK, now))
 		return
 	}
 	go c.postGeneric("email.received", now, data)
@@ -124,7 +124,7 @@ func (c *Client) EmailsCleaned(count int64, cutoff time.Time, retentionHours int
 	go c.postGeneric("email.cleaned", now, data)
 }
 
-func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, previewOTK string, at time.Time) discordEmbed {
+func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, previewOTK, keepOTK string, at time.Time) discordEmbed {
 	fields := []discordField{
 		{Name: "ID", Value: fmt.Sprintf("`#%d`", id), Inline: true},
 	}
@@ -135,7 +135,7 @@ func (c *Client) emailReceivedEmbed(id int64, from, to, subject, messageID, prev
 			Inline: false,
 		})
 	}
-	if actions := c.actionLinks(id, previewOTK); actions != "" {
+	if actions := c.actionLinks(id, previewOTK, keepOTK); actions != "" {
 		fields = append(fields, discordField{Name: "Actions", Value: actions, Inline: false})
 	}
 	return discordEmbed{
@@ -182,12 +182,12 @@ func (c *Client) emailsCleanedEmbed(count int64, cutoff time.Time, retentionHour
 	}
 }
 
-func (c *Client) actionLinks(id int64, otk string) string {
+func (c *Client) actionLinks(id int64, previewOTK, keepOTK string) string {
 	var links []string
-	if u := c.previewURL(id, otk); u != "" {
+	if u := c.previewURL(id, previewOTK); u != "" {
 		links = append(links, discordLink("Open", u))
 	}
-	if u := c.keepURL(id, otk); u != "" {
+	if u := c.keepURL(id, keepOTK); u != "" {
 		links = append(links, discordLink("Keep", u))
 	}
 	return strings.Join(links, " · ")

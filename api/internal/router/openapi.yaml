@@ -11,6 +11,7 @@ security:
 paths:
   /health:
     get:
+      operationId: healthCheck
       summary: Health check
       security: []
       responses:
@@ -19,9 +20,97 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessEnvelope"
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [status]
+                        properties:
+                          status:
+                            type: string
+                            example: ok
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /health/ready:
+    get:
+      operationId: readinessCheck
+      summary: Readiness check (database ping)
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [status]
+                        properties:
+                          status:
+                            type: string
+                            example: ready
+        "503":
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /internal/ingest:
+    post:
+      operationId: ingestEmail
+      summary: Ingest raw RFC822 message (Postfix internal)
+      description: Called by Postfix with `X-Envelope-To` header and raw message body. Uses the same API key as Bearer auth.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Envelope-To
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          message/rfc822:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [id]
+                        properties:
+                          id:
+                            type: integer
+                            format: int64
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /emails:
     get:
+      operationId: listEmails
       summary: List emails
       parameters:
         - $ref: "#/components/parameters/from"
@@ -31,6 +120,9 @@ paths:
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/after"
         - $ref: "#/components/parameters/before"
+        - $ref: "#/components/parameters/kept"
+        - $ref: "#/components/parameters/opened"
+        - $ref: "#/components/parameters/message_id"
       responses:
         "200":
           description: Email list
@@ -42,19 +134,13 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          emails:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/Email"
-                          total:
-                            type: integer
-                          limit:
-                            type: integer
-                          offset:
-                            type: integer
+                        $ref: "#/components/schemas/EmailList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
     delete:
+      operationId: deleteEmails
       summary: Delete emails matching filters
       parameters:
         - $ref: "#/components/parameters/from"
@@ -62,11 +148,98 @@ paths:
         - $ref: "#/components/parameters/subject"
         - $ref: "#/components/parameters/after"
         - $ref: "#/components/parameters/before"
+        - $ref: "#/components/parameters/kept"
+        - $ref: "#/components/parameters/opened"
+        - $ref: "#/components/parameters/message_id"
       responses:
         "200":
           description: Deleted count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeleteResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /emails/wait:
+    get:
+      operationId: waitForEmail
+      summary: Block until a matching email arrives
+      description: Polls until an email matches filters and `since_id` (if set). Pass `since_id` of the current newest email to wait only for new mail. `timeout` is capped below the server request timeout (default 30s).
+      parameters:
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/subject"
+        - $ref: "#/components/parameters/message_id"
+        - $ref: "#/components/parameters/kept"
+        - $ref: "#/components/parameters/opened"
+        - name: since_id
+          in: query
+          description: Only return emails with id greater than this value.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+        - name: timeout
+          in: query
+          description: Max seconds to wait (default 25, capped by server timeout).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 120
+            default: 25
+      responses:
+        "200":
+          description: Matching email
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Email"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "408":
+          description: Timeout waiting for email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /emails/stats:
+    get:
+      operationId: getEmailStats
+      summary: Mailbox aggregate stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/EmailStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /emails/latest:
     get:
+      operationId: getLatestEmails
       summary: Latest email(s), newest first
       description: Without `limit`, returns the single newest email. With `limit`, returns a list.
       parameters:
@@ -80,54 +253,150 @@ paths:
       responses:
         "200":
           description: Latest email, or list when limit is set
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - allOf:
+                      - $ref: "#/components/schemas/SuccessEnvelope"
+                      - type: object
+                        properties:
+                          data:
+                            $ref: "#/components/schemas/Email"
+                  - allOf:
+                      - $ref: "#/components/schemas/SuccessEnvelope"
+                      - type: object
+                        properties:
+                          data:
+                            $ref: "#/components/schemas/LatestEmailList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           description: No emails (only when limit is omitted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /emails/{id}:
     get:
+      operationId: getEmailById
       summary: Get email by ID
-      description: Records first open time in `opened_at` on the initial request.
+      description: Records first open time in `opened_at` on the initial request unless `track_open=false`.
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/emailId"
+        - $ref: "#/components/parameters/track_open"
       responses:
         "200":
           description: Email
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Email"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      operationId: headEmailById
+      summary: Check email exists (no body, no open tracking)
+      parameters:
+        - $ref: "#/components/parameters/emailId"
+      responses:
+        "200":
+          description: Exists
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
     delete:
+      operationId: deleteEmailById
       summary: Delete email by ID
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/emailId"
       responses:
         "200":
           description: Deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeleteOneResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /emails/{id}/keep:
-    get:
+    post:
+      operationId: keepEmail
       summary: Keep email from auto-cleanup
-      description: Marks an email to survive retention-based deletion. Use `apikey` or `otk` from webhook; `otk` is not consumed here (only preview clears it). Explicit DELETE still removes the email.
+      description: Marks an email to survive retention-based deletion. Explicit DELETE still removes the email.
+      parameters:
+        - $ref: "#/components/parameters/emailId"
+      responses:
+        "200":
+          description: Email marked as kept
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/KeepResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: keepEmailWebhook
+      summary: Keep email via webhook link
+      description: Browser-friendly GET used by webhook action links. Uses the separate `keep_otk` from the webhook payload (not consumed on use).
       security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/emailId"
         - name: apikey
           in: query
           schema:
             type: string
         - name: otk
           in: query
-          description: Preview token from webhook (reusable until preview is opened)
+          description: Keep link token from webhook (independent of preview token)
           schema:
             type: string
       responses:
@@ -141,28 +410,108 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          status:
-                            type: string
-                            enum: [kept, already_kept]
-                          email:
-                            $ref: "#/components/schemas/Email"
+                        $ref: "#/components/schemas/KeepResult"
         "401":
-          description: Invalid or missing credentials
+          $ref: "#/components/responses/Unauthorized"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: unkeepEmail
+      summary: Clear retention keep flag
+      description: Re-enables automatic retention cleanup for this email.
+      parameters:
+        - $ref: "#/components/parameters/emailId"
+      responses:
+        "200":
+          description: Email unkept
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnkeepResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /emails/{id}/raw:
+    get:
+      operationId: getEmailRaw
+      summary: Download raw RFC822 message
+      description: Returns stored MIME bytes. Open tracking applies unless `track_open=false`.
+      parameters:
+        - $ref: "#/components/parameters/emailId"
+        - $ref: "#/components/parameters/track_open"
+      responses:
+        "200":
+          description: Raw message
+          content:
+            message/rfc822:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /emails/{id}/preview-token:
+    post:
+      operationId: regeneratePreviewToken
+      summary: Regenerate preview one-time token
+      description: Issues a new `otk` and optional `preview_url` / `keep_url` when `PUBLIC_URL` is configured.
+      parameters:
+        - $ref: "#/components/parameters/emailId"
+      responses:
+        "200":
+          description: New token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PreviewTokenResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /emails/preview/{id}:
     get:
+      operationId: previewEmail
       summary: Preview email in browser
       description: Human-readable HTML view. Use `apikey` (reusable) or `otk` (one-time token from webhook). Records first open time in `opened_at`.
       security: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/emailId"
         - name: apikey
           in: query
           schema:
@@ -180,15 +529,48 @@ paths:
               schema:
                 type: string
         "401":
-          description: Invalid or missing credentials
+          $ref: "#/components/responses/Unauthorized"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: unauthorized
+    InternalError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: internal server error
   parameters:
+    emailId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     from:
       name: from
       in: query
@@ -209,13 +591,15 @@ components:
       in: query
       schema:
         type: integer
-        default: 50
+        minimum: 1
         maximum: 200
+        default: 50
     offset:
       name: offset
       in: query
       schema:
         type: integer
+        minimum: 0
         default: 0
     after:
       name: after
@@ -229,9 +613,35 @@ components:
       schema:
         type: string
         format: date-time
+    kept:
+      name: kept
+      in: query
+      description: When set, filter by retention keep flag (`true` or `false`).
+      schema:
+        type: boolean
+    opened:
+      name: opened
+      in: query
+      description: When set, filter by open state (`true` = has `opened_at`, `false` = unopened).
+      schema:
+        type: boolean
+    message_id:
+      name: message_id
+      in: query
+      description: Exact match on SMTP Message-ID header value.
+      schema:
+        type: string
+    track_open:
+      name: track_open
+      in: query
+      description: When `false`, do not set `opened_at` or fire open webhooks.
+      schema:
+        type: boolean
+        default: true
   schemas:
     SuccessEnvelope:
       type: object
+      required: [success, data]
       properties:
         success:
           type: boolean
@@ -240,17 +650,116 @@ components:
           type: object
     ErrorEnvelope:
       type: object
+      required: [success, error]
       properties:
         success:
           type: boolean
           example: false
         error:
           type: string
+          example: unauthorized
+    EmailList:
+      type: object
+      required: [emails, total, limit, offset]
+      properties:
+        emails:
+          type: array
+          items:
+            $ref: "#/components/schemas/Email"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+        offset:
+          type: integer
+          minimum: 0
+    LatestEmailList:
+      type: object
+      required: [emails, total, limit]
+      properties:
+        emails:
+          type: array
+          items:
+            $ref: "#/components/schemas/Email"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+    DeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          minimum: 0
+          description: Number of emails removed
+    DeleteOneResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          enum: [1]
+          description: Always 1 when the email existed and was deleted
+    KeepResult:
+      type: object
+      required: [status, email]
+      properties:
+        status:
+          type: string
+          enum: [kept, already_kept]
+        email:
+          $ref: "#/components/schemas/Email"
+    UnkeepResult:
+      type: object
+      required: [status, email]
+      properties:
+        status:
+          type: string
+          enum: [unkept, already_unkept]
+        email:
+          $ref: "#/components/schemas/Email"
+    PreviewTokenResult:
+      type: object
+      required: [otk]
+      properties:
+        otk:
+          type: string
+        preview_url:
+          type: string
+          format: uri
+        keep_url:
+          type: string
+          format: uri
+    EmailStats:
+      type: object
+      required: [total, kept, unopened]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        kept:
+          type: integer
+          minimum: 0
+        unopened:
+          type: integer
+          minimum: 0
+        oldest_created_at:
+          type: string
+          format: date-time
     Email:
       type: object
+      required: [id, message_id, mail_from, rcpt_to, subject, headers_json, created_at, kept]
       properties:
         id:
           type: integer
+          format: int64
         message_id:
           type: string
         mail_from:
@@ -261,12 +770,15 @@ components:
           type: string
         mail_date:
           type: string
+          format: date-time
+          description: Parsed Date header in RFC 3339 form; omitted when the header was absent or unparseable.
         text_body:
           type: string
         html_body:
           type: string
         headers_json:
           type: string
+          description: JSON-encoded map of raw message headers
         created_at:
           type: string
           format: date-time
@@ -283,12 +795,19 @@ components:
             $ref: "#/components/schemas/Attachment"
     Attachment:
       type: object
+      required: [id, email_id, filename, content_type, size]
       properties:
         id:
           type: integer
+          format: int64
+        email_id:
+          type: integer
+          format: int64
         filename:
           type: string
         content_type:
           type: string
         size:
           type: integer
+          format: int64
+          minimum: 0

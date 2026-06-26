@@ -23,7 +23,7 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	c := New(srv.URL+"/api/webhooks/1/token", "https://mail.example.com", log)
-	c.EmailReceived(7, "a@x.com", "b@x.com", "hello", "<id@x.com>", "one-time-token")
+	c.EmailReceived(7, "a@x.com", "b@x.com", "hello", "<id@x.com>", "preview-token", "keep-token")
 
 	deadline := time.Now().Add(2 * time.Second)
 	for got.Load() == nil && time.Now().Before(deadline) {
@@ -64,7 +64,7 @@ func TestEmailReceived_DiscordPayload(t *testing.T) {
 	if id != "`#7`" {
 		t.Fatalf("id field %q", id)
 	}
-	wantActions := "[Open](https://mail.example.com/emails/preview/7?otk=one-time-token) · [Keep](https://mail.example.com/emails/7/keep?otk=one-time-token)"
+	wantActions := "[Open](https://mail.example.com/emails/preview/7?otk=preview-token) · [Keep](https://mail.example.com/emails/7/keep?otk=keep-token)"
 	if actions != wantActions {
 		t.Fatalf("actions %q", actions)
 	}
@@ -202,7 +202,7 @@ func TestEmailReceived_PreviewURL(t *testing.T) {
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	c := New(srv.URL, "https://mail.example.com", log)
-	c.EmailReceived(7, "a@x.com", "b@x.com", "hi", "<id@x.com>", "one-time-token")
+	c.EmailReceived(7, "a@x.com", "b@x.com", "hi", "<id@x.com>", "preview-token", "keep-token")
 
 	deadline := time.Now().Add(2 * time.Second)
 	for got.Load() == nil && time.Now().Before(deadline) {
@@ -218,11 +218,11 @@ func TestEmailReceived_PreviewURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := payload["data"].(map[string]any)
-	wantPreview := "https://mail.example.com/emails/preview/7?otk=one-time-token"
+	wantPreview := "https://mail.example.com/emails/preview/7?otk=preview-token"
 	if data["preview_url"] != wantPreview {
 		t.Fatalf("preview_url %v, want %q", data["preview_url"], wantPreview)
 	}
-	wantKeep := "https://mail.example.com/emails/7/keep?otk=one-time-token"
+	wantKeep := "https://mail.example.com/emails/7/keep?otk=keep-token"
 	if data["keep_url"] != wantKeep {
 		t.Fatalf("keep_url %v, want %q", data["keep_url"], wantKeep)
 	}

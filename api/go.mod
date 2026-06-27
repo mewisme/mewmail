@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/emersion/go-message v0.18.2
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.4
 	modernc.org/sqlite v1.36.2
 )
 
